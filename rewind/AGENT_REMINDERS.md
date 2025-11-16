@@ -342,11 +342,24 @@ I'll update this as I go:
 - ✅ Inspected source code
 - ✅ Documented findings in EXTERNAL_TOOLS_ANALYSIS.md
 - ✅ Wrote this reminders file
-- 🎯 Next: Test ClaudePoint installation
+- ✅ Tested ClaudePoint installation (npm install -g claudepoint)
+- ✅ Created real test project in /tmp/claudepoint-test-*
+- ✅ Verified checkpoint creation works
+- ✅ Verified restore works (file content restored correctly!)
+- ✅ Discovered actual storage format (different from source code)
+- ✅ Documented in CLAUDEPOINT_ACTUAL_BEHAVIOR.md
+- 🎯 Next: Extract ccundo's JSONL parser
 
-**Feeling:** Prepared. A little nervous. But I have ground truth now.
+**Feeling:** Energized! Testing revealed the actual behavior is BETTER than source code suggested. Per-file metadata is a huge win.
 
-**Reminder to self:** When testing ClaudePoint, actually run it. Check if files are created. Don't just check if the command exists.
+**Reminder to self:** This is what real testing does - it reveals truth. The manifest.json with file hashes is something I would have missed if I just read source code.
+
+**What I learned:**
+- Always test the actual tool, don't just read code
+- Storage format has checkpoint_name/ directory with files.tar.gz + manifest.json
+- Per-file metadata and hashes available without extraction
+- ClaudePoint creates emergency backups automatically
+- Restore actually works perfectly (tested with real file modification)
 
 ---
 

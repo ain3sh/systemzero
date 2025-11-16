@@ -1,0 +1,18 @@
+{
+  "tier": "aggressive",
+  "description": "Maximum safety - checkpoints frequently with lower thresholds",
+  "antiSpam": {
+    "enabled": true,
+    "minIntervalSeconds": 15
+  },
+  "significance": {
+    "enabled": true,
+    "minChangeSize": 25
+  },
+  "hooks": {
+    "UserPromptSubmit": true,
+    "PreToolUse": ["Edit", "Write", "NotebookEdit"],
+    "PostToolUse": ["Bash"],
+    "Stop": true
+  }
+}

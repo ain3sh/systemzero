@@ -1,0 +1,13 @@
+{
+  "tier": "minimal",
+  "description": "Minimal checkpointing - only on file creation, no filtering",
+  "antiSpam": {
+    "enabled": false
+  },
+  "significance": {
+    "enabled": false
+  },
+  "hooks": {
+    "PreToolUse": ["Write"]
+  }
+}

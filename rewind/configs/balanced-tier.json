@@ -1,0 +1,30 @@
+{
+  "tier": "balanced",
+  "description": "Smart checkpointing with anti-spam and significance detection. Recommended for most users.",
+  "antiSpam": {
+    "enabled": true,
+    "minIntervalSeconds": 30
+  },
+  "significance": {
+    "enabled": true,
+    "minChangeSize": 50,
+    "criticalFiles": [
+      "package.json",
+      "requirements.txt",
+      "Dockerfile",
+      "docker-compose.yml",
+      "tsconfig.json",
+      "*.config.js",
+      "*.config.ts"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": {
+      "enabled": true,
+      "tools": ["Edit", "Write", "NotebookEdit"]
+    },
+    "SessionStart": {
+      "enabled": true
+    }
+  }
+}

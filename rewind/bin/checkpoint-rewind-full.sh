@@ -86,13 +86,16 @@ echo "✂️  Truncating conversation..."
 TRUNCATOR=""
 if [[ -f "$(dirname "$0")/../lib/rewind/ConversationTruncator.js" ]]; then
     TRUNCATOR="$(dirname "$0")/../lib/rewind/ConversationTruncator.js"
+elif [[ -f "$HOME/.checkpoint-rewind/rewind/ConversationTruncator.js" ]]; then
+    TRUNCATOR="$HOME/.checkpoint-rewind/rewind/ConversationTruncator.js"
 elif [[ -f "$HOME/.local/lib/checkpoint-rewind/rewind/ConversationTruncator.js" ]]; then
     TRUNCATOR="$HOME/.local/lib/checkpoint-rewind/rewind/ConversationTruncator.js"
 else
     echo "❌ ConversationTruncator not found"
     echo "   Looked in:"
     echo "     - $(dirname "$0")/../lib/rewind/ConversationTruncator.js"
-    echo "     - $HOME/.local/lib/checkpoint-rewind/rewind/ConversationTruncator.js"
+    echo "     - $HOME/.checkpoint-rewind/rewind/ConversationTruncator.js"
+    echo "     - $HOME/.local/lib/checkpoint-rewind/rewind/ConversationTruncator.js (legacy)"
     echo ""
     echo "   Code has been restored, but conversation is unchanged."
     exit 1

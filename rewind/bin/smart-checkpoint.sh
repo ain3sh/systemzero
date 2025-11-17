@@ -139,12 +139,32 @@ create_checkpoint() {
     echo "$checkpoint_name"
 }
 
+# Auto-detect library base directory
+detect_lib_dir() {
+    # Try project-level first (for project installs)
+    if [[ -n "${CLAUDE_PROJECT_DIR:-}" ]] && [[ -d "${CLAUDE_PROJECT_DIR}/.checkpoint-rewind" ]]; then
+        echo "${CLAUDE_PROJECT_DIR}/.checkpoint-rewind"
+    elif [[ -n "${FACTORY_PROJECT_DIR:-}" ]] && [[ -d "${FACTORY_PROJECT_DIR}/.checkpoint-rewind" ]]; then
+        echo "${FACTORY_PROJECT_DIR}/.checkpoint-rewind"
+    # Fall back to user-level install
+    elif [[ -d "$HOME/.checkpoint-rewind" ]]; then
+        echo "$HOME/.checkpoint-rewind"
+    # Legacy location
+    elif [[ -d "$HOME/.local/lib/checkpoint-rewind" ]]; then
+        echo "$HOME/.local/lib/checkpoint-rewind"
+    else
+        echo ""
+    fi
+}
+
+LIB_BASE_DIR=$(detect_lib_dir)
+
 # Get conversation context for current session
 get_conversation_context() {
-    local session_parser="$HOME/.local/lib/checkpoint-rewind/parsers/SessionParser.js"
+    local session_parser="${LIB_BASE_DIR}/parsers/SessionParser.js"
     
     # Check if SessionParser exists
-    if [[ ! -f "$session_parser" ]]; then
+    if [[ -z "$LIB_BASE_DIR" ]] || [[ ! -f "$session_parser" ]]; then
         echo "[smart-checkpoint] WARNING: SessionParser not found at $session_parser" >&2
         echo "null"
         return
@@ -186,10 +206,10 @@ store_metadata() {
     local checkpoint_name="$1"
     local conversation_context="$2"
     
-    local metadata_tool="$HOME/.local/lib/checkpoint-rewind/metadata/ConversationMetadata.js"
+    local metadata_tool="${LIB_BASE_DIR}/metadata/ConversationMetadata.js"
     
     # Check if ConversationMetadata exists
-    if [[ ! -f "$metadata_tool" ]]; then
+    if [[ -z "$LIB_BASE_DIR" ]] || [[ ! -f "$metadata_tool" ]]; then
         echo "[smart-checkpoint] WARNING: ConversationMetadata not found at $metadata_tool" >&2
         return 1
     fi

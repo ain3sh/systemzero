@@ -57,8 +57,9 @@ cd ~/rewind
 
 **Expected Output:**
 ```
-✓ Installed smart-checkpoint.sh to ~/.local/bin/
-✓ Installed Node.js modules to ~/.local/lib/checkpoint-rewind/
+✓ Installed smart-checkpoint.sh to ~/.claude/hooks/
+✓ Installed smart-checkpoint.sh to ~/.factory/hooks/
+✓ Installed Node.js modules to ~/.checkpoint-rewind/
 ✓ Installed tier configs to ~/.config/checkpoint-rewind/tiers/
 ✓ Merged hooks into existing settings
 ✓ Added CHECKPOINT_TIER to ~/.zshrc
@@ -232,7 +233,13 @@ npm install -g claudepoint
 
 ### "smart-checkpoint.sh not found"
 
-Re-run installer:
+Check if hooks are installed:
+```bash
+ls -la ~/.claude/hooks/smart-checkpoint.sh
+ls -la ~/.factory/hooks/smart-checkpoint.sh
+```
+
+If missing, re-run installer:
 ```bash
 ./bin/install-hooks.sh balanced
 ```
@@ -256,7 +263,7 @@ cat ~/.config/checkpoint-rewind/tiers/balanced-tier.json
    ↓
 3. PreToolUse hook fires (from ~/.claude/settings.json)
    ↓
-4. Runs: ~/.local/bin/smart-checkpoint.sh pre-modify "Edit" "$SESSION_ID"
+4. Runs: ~/.claude/hooks/smart-checkpoint.sh pre-modify "Edit" "$SESSION_ID"
    ↓
 5. Script checks anti-spam (30s cooldown)
    ↓
@@ -300,4 +307,26 @@ Once basic checkpointing works:
 
 **Questions? Issues?**
 
-Check `ARCHITECTURE.md` for how it all works, or `UNFUCK_SUMMARY.md` for what was changed.
+Check `ARCHITECTURE.md` for how it all works.
+
+---
+
+## 🎨 Advanced: Project-Level Install
+
+For project-specific hooks (stored in the repo):
+
+```bash
+cd ~/your-project
+~/rewind/bin/install-hooks.sh --project balanced
+```
+
+This installs to:
+- `./.claude/hooks/` and `./.factory/hooks/` (project-local)
+- `./.checkpoint-rewind/` (libraries)
+
+Benefits:
+- Team shares same checkpoint configuration
+- Version control the hooks setup
+- Different tiers per project
+
+**Note:** Uses `$CLAUDE_PROJECT_DIR` and `$FACTORY_PROJECT_DIR` env vars for absolute paths.

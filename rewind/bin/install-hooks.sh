@@ -99,8 +99,10 @@ if [[ "$PROJECT_INSTALL" == "true" ]]; then
     FACTORY_HOOKS_DIR="./.factory/hooks"
     LIB_BASE_DIR="./.checkpoint-rewind"
     CONFIG_DIR="./.checkpoint-rewind/tiers"
-    SCRIPT_PATH_VAR_CLAUDE="\"\$CLAUDE_PROJECT_DIR\"/.claude/hooks"
-    SCRIPT_PATH_VAR_FACTORY="\"\$FACTORY_PROJECT_DIR\"/.factory/hooks"
+    # For JSON: need to escape the $ as \$ but bash will interpret it
+    # So we use \\\$ which becomes \$ in the JSON string
+    SCRIPT_PATH_VAR_CLAUDE="\\\$CLAUDE_PROJECT_DIR/.claude/hooks"
+    SCRIPT_PATH_VAR_FACTORY="\\\$FACTORY_PROJECT_DIR/.factory/hooks"
 else
     # User-level install
     CLAUDE_HOOKS_DIR="$HOME/.claude/hooks"

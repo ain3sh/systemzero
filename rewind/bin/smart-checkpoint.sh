@@ -23,21 +23,10 @@ STATE_DIR_DROID="$HOME/.factory-checkpoints"
 
 # Detect which agent we're running in
 detect_agent() {
-    # Check environment variables first
-    if [[ -n "${CLAUDE_SESSION_ID:-}" ]] || [[ "${SESSION_ID:-}" == *"claude"* ]]; then
+    # Check which agent directories or env vars exist
+    if [[ -d "$HOME/.claude/projects" ]] || [[ -n "${CLAUDE_PROJECT_DIR:-}" ]]; then
         echo "claude-code"
-        return
-    fi
-    
-    if [[ -n "${DROID_SESSION_ID:-}" ]] || [[ "${SESSION_ID:-}" == *"droid"* ]]; then
-        echo "droid-cli"
-        return
-    fi
-    
-    # Fall back to checking which directories exist
-    if [[ -d "$HOME/.claude/projects" ]]; then
-        echo "claude-code"
-    elif [[ -d "$HOME/.factory/sessions" ]]; then
+    elif [[ -d "$HOME/.factory/sessions" ]] || [[ -n "${FACTORY_PROJECT_DIR:-}" ]]; then
         echo "droid-cli"
     else
         echo "unknown"
@@ -230,8 +219,27 @@ store_metadata() {
 
 # Main workflow
 main() {
+    # Read hook input JSON from stdin
+    local hook_input
+    hook_input=$(cat)
+    
+    # Parse JSON fields using jq
+    local session_id="unknown"
+    local tool_name="unknown"
+    local hook_event="unknown"
+    
+    if command -v jq &>/dev/null && [[ -n "$hook_input" ]]; then
+        session_id=$(echo "$hook_input" | jq -r '.session_id // "unknown"')
+        tool_name=$(echo "$hook_input" | jq -r '.tool_name // "unknown"')
+        hook_event=$(echo "$hook_input" | jq -r '.hook_event_name // "unknown"')
+    fi
+    
+    # Export for use in other functions
+    export SESSION_ID="$session_id"
+    export TOOL_NAME="$tool_name"
+    
+    # Determine action from argument or hook event
     local action="${1:-pre-tool-use}"
-    local tool_name="${TOOL_NAME:-unknown}"
     
     case "$action" in
         pre-tool-use)

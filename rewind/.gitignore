@@ -1,2 +1,10 @@
-# External tool repositories (cloned for reference)
-references/
+# Agent private notes
+AGENT_REMINDERS.md
+
+# Test artifacts
+test-checkpoint-demo/
+
+# Backup files
+*.backup.*
+*.old
+*.fucked

@@ -7,12 +7,9 @@
   },
   "significance": {
     "enabled": true,
-    "minChangeSize": 25
-  },
-  "hooks": {
-    "UserPromptSubmit": true,
-    "PreToolUse": ["Edit", "Write", "NotebookEdit"],
-    "PostToolUse": ["Bash"],
-    "Stop": true
+    "minChangeSize": 25,
+    "criticalFiles": [
+      "*"
+    ]
   }
 }

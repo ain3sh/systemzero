@@ -1,0 +1,81 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|NotebookEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "-c",
+              "~/.local/bin/smart-checkpoint.sh pre-modify \"$TOOL_NAME\" \"$SESSION_ID\""
+            ],
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "-c",
+              "~/.local/bin/smart-checkpoint.sh analyze-prompt \"$SESSION_ID\""
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "-c",
+              "~/.local/bin/smart-checkpoint.sh post-bash \"$SESSION_ID\""
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "-c",
+              "~/.local/bin/smart-checkpoint.sh session-start \"$SESSION_ID\""
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "-c",
+              "~/.local/bin/smart-checkpoint.sh stop \"$SESSION_ID\""
+            ],
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

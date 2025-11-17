@@ -93,15 +93,12 @@ install_files() {
         mkdir -p "$HOME/.local/bin"
         mkdir -p "$HOME/.local/lib/checkpoint-rewind/parsers"
         mkdir -p "$HOME/.local/lib/checkpoint-rewind/metadata"
-        mkdir -p "$HOME/.local/lib/checkpoint-rewind/rewind"
-        mkdir -p "$HOME/.config/checkpoint-rewind/tiers"
         mkdir -p "$HOME/.claude-checkpoints"
         mkdir -p "$HOME/.factory-checkpoints"
     else
         echo "[DRY RUN] Would create directories:"
         echo "  - $HOME/.local/bin"
-        echo "  - $HOME/.local/lib/checkpoint-rewind/{parsers,metadata,rewind}"
-        echo "  - $HOME/.config/checkpoint-rewind/tiers"
+        echo "  - $HOME/.local/lib/checkpoint-rewind/{parsers,metadata}"
         echo "  - $HOME/.claude-checkpoints"
         echo "  - $HOME/.factory-checkpoints"
     fi
@@ -115,37 +112,15 @@ install_files() {
         echo "[DRY RUN] Would copy: smart-checkpoint.sh → ~/.local/bin/"
     fi
     
-    # Copy rewind script
+    # Copy Node.js modules
     if [[ "$DRY_RUN" == "false" ]]; then
-        cp "$SCRIPT_DIR/checkpoint-rewind-full.sh" "$HOME/.local/bin/"
-        chmod +x "$HOME/.local/bin/checkpoint-rewind-full.sh"
-        echo "✓ Installed checkpoint-rewind-full.sh to ~/.local/bin/"
-    else
-        echo "[DRY RUN] Would copy: checkpoint-rewind-full.sh → ~/.local/bin/"
-    fi
-    
-    # Copy Node.js modules to installed location
-    if [[ "$DRY_RUN" == "false" ]]; then
-        cp "$PROJECT_ROOT/lib/parsers/SessionParser.js" \
-           "$HOME/.local/lib/checkpoint-rewind/parsers/"
-        cp "$PROJECT_ROOT/lib/metadata/ConversationMetadata.js" \
-           "$HOME/.local/lib/checkpoint-rewind/metadata/"
-        cp "$PROJECT_ROOT/lib/rewind/ConversationTruncator.js" \
-           "$HOME/.local/lib/checkpoint-rewind/rewind/"
+        cp "$PROJECT_ROOT/lib/parsers/SessionParser.js" "$HOME/.local/lib/checkpoint-rewind/parsers/"
+        cp "$PROJECT_ROOT/lib/metadata/ConversationMetadata.js" "$HOME/.local/lib/checkpoint-rewind/metadata/"
         echo "✓ Installed Node.js modules to ~/.local/lib/checkpoint-rewind/"
     else
         echo "[DRY RUN] Would copy:"
         echo "  - SessionParser.js → ~/.local/lib/checkpoint-rewind/parsers/"
         echo "  - ConversationMetadata.js → ~/.local/lib/checkpoint-rewind/metadata/"
-        echo "  - ConversationTruncator.js → ~/.local/lib/checkpoint-rewind/rewind/"
-    fi
-    
-    # Copy tier configuration files (script parameters)
-    if [[ "$DRY_RUN" == "false" ]]; then
-        cp "$PROJECT_ROOT/configs/"*-tier.json "$HOME/.config/checkpoint-rewind/tiers/"
-        echo "✓ Installed tier configs to ~/.config/checkpoint-rewind/tiers/"
-    else
-        echo "[DRY RUN] Would copy tier configs to ~/.config/checkpoint-rewind/tiers/"
     fi
     
     echo ""
@@ -155,27 +130,18 @@ install_files() {
 update_agent_settings() {
     local agent="$1"
     local settings_file=""
-    local hook_template=""
     
     case "$agent" in
         claude-code)
             settings_file="$HOME/.claude/settings.json"
-            hook_template="$PROJECT_ROOT/hooks/${TIER}-hooks.json"
             ;;
         droid-cli)
             settings_file="$HOME/.factory/settings.json"
-            hook_template="$PROJECT_ROOT/hooks/${TIER}-hooks.json"
             ;;
     esac
     
     echo "Configuring hooks for $agent..."
     echo "Settings file: $settings_file"
-    
-    # Verify hook template exists
-    if [[ ! -f "$hook_template" ]]; then
-        echo "❌ Hook template not found: $hook_template" >&2
-        return 1
-    fi
     
     # Backup existing settings
     if [[ -f "$settings_file" ]]; then
@@ -190,55 +156,71 @@ update_agent_settings() {
         echo "  No existing settings.json found"
     fi
     
-    # Merge or create settings
-    if [[ "$DRY_RUN" == "false" ]]; then
-        if [[ -f "$settings_file" ]]; then
-            # Merge: preserve existing settings, add/replace hooks
-            # This merges the hook template with existing settings
-            jq -s '.[0] * .[1]' "$settings_file" "$hook_template" > "${settings_file}.tmp"
-            mv "${settings_file}.tmp" "$settings_file"
-            echo "✓ Merged hooks into existing settings"
-        else
-            # New file: just copy hook template
-            cp "$hook_template" "$settings_file"
-            echo "✓ Created new settings with hooks"
-        fi
+    # Create new settings with hooks
+    local new_settings
+    if [[ -f "$settings_file" ]]; then
+        # Merge with existing settings (strip comments first - Droid uses JSON with comments)
+        local existing_json=$(grep -v '^\s*//' "$settings_file" | grep -v '^\s*#')
+        new_settings=$(echo "$existing_json" | jq '. + {
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Edit|Write|NotebookEdit",
+      "hooks": [{
+        "type": "command",
+        "command": "bash",
+        "args": ["-c", "~/.local/bin/smart-checkpoint.sh pre-tool-use"],
+        "timeout": 10
+      }]
+    }],
+    "SessionStart": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash",
+        "args": ["-c", "~/.local/bin/smart-checkpoint.sh session-start"],
+        "timeout": 5
+      }]
+    }]
+  }
+}')
     else
-        echo "[DRY RUN] Would merge/create settings with hooks from: $hook_template"
+        # Create new settings file
+        new_settings='{
+  "hooks": {
+    "PreToolUse": [{
+      "matcher": "Edit|Write|NotebookEdit",
+      "hooks": [{
+        "type": "command",
+        "command": "bash",
+        "args": ["-c", "~/.local/bin/smart-checkpoint.sh pre-tool-use"],
+        "timeout": 10
+      }]
+    }],
+    "SessionStart": [{
+      "matcher": "*",
+      "hooks": [{
+        "type": "command",
+        "command": "bash",
+        "args": ["-c", "~/.local/bin/smart-checkpoint.sh session-start"],
+        "timeout": 5
+      }]
+    }]
+  }
+}'
     fi
     
-    echo ""
-}
-
-# Set CHECKPOINT_TIER environment variable
-set_tier_env() {
-    echo "Configuring CHECKPOINT_TIER environment variable..."
-    
-    # Determine shell profile
-    local shell_profile=""
-    if [[ -f "$HOME/.zshrc" ]]; then
-        shell_profile="$HOME/.zshrc"
-    elif [[ -f "$HOME/.bashrc" ]]; then
-        shell_profile="$HOME/.bashrc"
-    else
-        echo "⚠️  No .bashrc or .zshrc found, skipping environment variable setup"
-        echo "   You'll need to manually set: export CHECKPOINT_TIER=$TIER"
-        return
+    # Validate JSON
+    if ! echo "$new_settings" | jq empty 2>/dev/null; then
+        echo "❌ ERROR: Generated invalid JSON for $agent settings" >&2
+        return 1
     fi
     
+    # Write new settings
     if [[ "$DRY_RUN" == "false" ]]; then
-        # Check if already exists
-        if grep -q "CHECKPOINT_TIER" "$shell_profile"; then
-            echo "  CHECKPOINT_TIER already exists in $shell_profile"
-        else
-            echo "" >> "$shell_profile"
-            echo "# Checkpoint/Rewind System" >> "$shell_profile"
-            echo "export CHECKPOINT_TIER=$TIER" >> "$shell_profile"
-            echo "✓ Added CHECKPOINT_TIER=$TIER to $shell_profile"
-        fi
+        echo "$new_settings" > "$settings_file"
+        echo "✓ Updated hooks in $settings_file"
     else
-        echo "[DRY RUN] Would add to $shell_profile:"
-        echo "  export CHECKPOINT_TIER=$TIER"
+        echo "[DRY RUN] Would write new settings with hooks"
     fi
     
     echo ""
@@ -252,9 +234,6 @@ for agent in "${AGENTS[@]}"; do
     update_agent_settings "$agent"
 done
 
-# Set environment variable
-set_tier_env
-
 # Print completion message
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 if [[ "$DRY_RUN" == "true" ]]; then
@@ -267,8 +246,7 @@ echo ""
 
 if [[ "$DRY_RUN" == "false" ]]; then
     echo "Next steps:"
-    echo "  1. Restart your shell (or run: source ~/.bashrc)"
-    echo "  2. Restart your agent:"
+    echo "  1. Restart your agent:"
     for agent in "${AGENTS[@]}"; do
         case "$agent" in
             claude-code)
@@ -280,23 +258,18 @@ if [[ "$DRY_RUN" == "false" ]]; then
         esac
     done
     echo ""
-    echo "  3. Test automatic checkpointing:"
+    echo "  2. Test automatic checkpointing:"
     echo "     cd ~/test-project"
     echo "     claude  # (or droid)"
     echo "     # Make a code change (create/edit file)"
     echo "     # Exit agent"
-    echo "     claudepoint list  # Should see 'Auto: Before...' checkpoint"
+    echo "     claudepoint list  # Should see 'Auto: Before Write/Edit' checkpoint"
     echo ""
-    echo "  4. Check conversation metadata:"
+    echo "  3. Check conversation metadata:"
     echo "     cat ~/test-project/.claudepoint/conversation_metadata.json | jq"
     echo ""
     echo "Installed for: ${AGENTS[*]}"
     echo "Tier: $TIER"
-    echo ""
-    echo "Configuration locations:"
-    echo "  • Hook scripts: ~/.local/bin/"
-    echo "  • Tier configs: ~/.config/checkpoint-rewind/tiers/"
-    echo "  • Hook registration: ~/.claude/settings.json (or ~/.factory/settings.json)"
 else
     echo "Run without --dry-run to actually install."
 fi

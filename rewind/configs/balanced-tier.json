@@ -17,14 +17,5 @@
       "*.config.js",
       "*.config.ts"
     ]
-  },
-  "hooks": {
-    "PreToolUse": {
-      "enabled": true,
-      "tools": ["Edit", "Write", "NotebookEdit"]
-    },
-    "SessionStart": {
-      "enabled": true
-    }
   }
 }

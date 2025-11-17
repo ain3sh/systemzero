@@ -9,13 +9,13 @@
 
 set -euo pipefail
 
-# Get script directory for finding our lib/ files
+# Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(dirname "$SCRIPT_DIR")"
 
-# Configuration
+# Configuration - read from installed location
 TIER="${CHECKPOINT_TIER:-balanced}"
-CONFIG_FILE="$PROJECT_ROOT/configs/${TIER}-tier.json"
+CONFIG_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/checkpoint-rewind"
+CONFIG_FILE="$CONFIG_DIR/tiers/${TIER}-tier.json"
 
 # State directories for anti-spam tracking
 STATE_DIR_CLAUDE="$HOME/.claude-checkpoints"
@@ -50,16 +50,29 @@ STATE_DIR="$STATE_DIR_CLAUDE"
 
 mkdir -p "$STATE_DIR"
 
-# Load configuration
+# Load configuration from tier config file
 load_config() {
-    if [[ -f "$CONFIG_FILE" ]]; then
-        # Extract values using grep/sed (avoid jq dependency for now)
-        ANTI_SPAM_ENABLED=$(grep -o '"enabled"[[:space:]]*:[[:space:]]*true' "$CONFIG_FILE" | head -1 | wc -l)
-        ANTI_SPAM_INTERVAL=$(grep -o '"minIntervalSeconds"[[:space:]]*:[[:space:]]*[0-9]*' "$CONFIG_FILE" | grep -o '[0-9]*$' || echo "30")
-    else
-        # Defaults for balanced tier
+    if [[ ! -f "$CONFIG_FILE" ]]; then
+        echo "[smart-checkpoint] WARNING: Config not found: $CONFIG_FILE" >&2
+        echo "[smart-checkpoint] Using default values (balanced tier)" >&2
         ANTI_SPAM_ENABLED=1
         ANTI_SPAM_INTERVAL=30
+        MIN_CHANGE_SIZE=50
+        return
+    fi
+    
+    # Load from tier config using jq if available
+    if command -v jq &>/dev/null; then
+        ANTI_SPAM_ENABLED=$(jq -r '.antiSpam.enabled // true' "$CONFIG_FILE")
+        [[ "$ANTI_SPAM_ENABLED" == "true" ]] && ANTI_SPAM_ENABLED=1 || ANTI_SPAM_ENABLED=0
+        ANTI_SPAM_INTERVAL=$(jq -r '.antiSpam.minIntervalSeconds // 30' "$CONFIG_FILE")
+        MIN_CHANGE_SIZE=$(jq -r '.significance.minChangeSize // 50' "$CONFIG_FILE")
+    else
+        # Fallback: use grep/sed
+        echo "[smart-checkpoint] WARNING: jq not found, using grep fallback" >&2
+        ANTI_SPAM_ENABLED=$(grep -o '"enabled"[[:space:]]*:[[:space:]]*true' "$CONFIG_FILE" | head -1 | wc -l)
+        ANTI_SPAM_INTERVAL=$(grep -o '"minIntervalSeconds"[[:space:]]*:[[:space:]]*[0-9]*' "$CONFIG_FILE" | grep -o '[0-9]*$' || echo "30")
+        MIN_CHANGE_SIZE=50
     fi
 }
 
@@ -128,7 +141,7 @@ create_checkpoint() {
 
 # Get conversation context for current session
 get_conversation_context() {
-    local session_parser="$PROJECT_ROOT/lib/parsers/SessionParser.js"
+    local session_parser="$HOME/.local/lib/checkpoint-rewind/parsers/SessionParser.js"
     
     # Check if SessionParser exists
     if [[ ! -f "$session_parser" ]]; then
@@ -173,7 +186,7 @@ store_metadata() {
     local checkpoint_name="$1"
     local conversation_context="$2"
     
-    local metadata_tool="$PROJECT_ROOT/lib/metadata/ConversationMetadata.js"
+    local metadata_tool="$HOME/.local/lib/checkpoint-rewind/metadata/ConversationMetadata.js"
     
     # Check if ConversationMetadata exists
     if [[ ! -f "$metadata_tool" ]]; then

@@ -6,8 +6,5 @@
   },
   "significance": {
     "enabled": false
-  },
-  "hooks": {
-    "PreToolUse": ["Write"]
   }
 }

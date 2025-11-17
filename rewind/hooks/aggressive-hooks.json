@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.local/bin/smart-checkpoint.sh pre-modify \"$TOOL_NAME\" \"$SESSION_ID\"",
+            "command": "~/.local/bin/smart-checkpoint.sh pre-tool-use",
             "timeout": 10
           }
         ]
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.local/bin/smart-checkpoint.sh analyze-prompt \"$SESSION_ID\"",
+            "command": "~/.local/bin/smart-checkpoint.sh analyze-prompt",
             "timeout": 5
           }
         ]
@@ -29,7 +29,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.local/bin/smart-checkpoint.sh post-bash \"$SESSION_ID\"",
+            "command": "~/.local/bin/smart-checkpoint.sh post-bash",
             "timeout": 5
           }
         ]
@@ -40,7 +40,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.local/bin/smart-checkpoint.sh session-start \"$SESSION_ID\"",
+            "command": "~/.local/bin/smart-checkpoint.sh session-start",
             "timeout": 5
           }
         ]
@@ -51,7 +51,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.local/bin/smart-checkpoint.sh stop \"$SESSION_ID\"",
+            "command": "~/.local/bin/smart-checkpoint.sh stop",
             "timeout": 5
           }
         ]

@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "~/.local/bin/smart-checkpoint.sh session-start \"$SESSION_ID\"",
+            "command": "~/.local/bin/smart-checkpoint.sh session-start",
             "timeout": 5
           }
         ]

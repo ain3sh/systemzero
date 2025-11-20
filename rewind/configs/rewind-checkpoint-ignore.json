@@ -1,0 +1,28 @@
+{
+  "ignorePatterns": [
+    ".git",
+    ".rewind",
+    ".claude",
+    ".factory",
+    "node_modules",
+    "dist",
+    "build",
+    "coverage",
+    "out",
+    "tmp",
+    "temp",
+    "*.log",
+    "*.tmp"
+  ],
+  "additionalIgnores": [
+    ".cache",
+    ".next",
+    ".nuxt",
+    "*.swp",
+    "*.bak"
+  ],
+  "forceInclude": [
+    ".env.example",
+    "scripts/setup.sh"
+  ]
+}

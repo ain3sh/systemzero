@@ -1,332 +1,108 @@
-# Quick Test Guide: Does It Work?
+# Quick Test Guide: Rewind-Native Hooks
 
-## ✅ Status: **READY TO TEST**
+## ✅ Status: READY TO TEST
 
-The code is complete and functional. Here's how to test it in a Claude Code chat.
+Claude/Droid hooks now run entirely on the vendored Rewind engine (no ClaudePoint dependency). Follow these steps to verify installation, checkpoint creation, and rewind behaviour.
 
 ---
 
-## Prerequisites Check
+## 0. Prerequisites
 
 ```bash
-# 1. Check ClaudePoint is installed
-claudepoint --version
-# If not: npm install -g claudepoint
-
-# 2. Check Node.js
+# Node.js (v18+ recommended)
 node --version
-# Need v16+
 
-# 3. Check jq
+# jq for tier parsing
 jq --version
-# If not: sudo apt install jq (Linux) or brew install jq (Mac)
 ```
 
 ---
 
-## Test 1: Dry Run (Safe - No Changes)
+## 1. Installation
+
+Use the new unified installer:
 
 ```bash
-cd ~/rewind  # or wherever you cloned the repo
-
-# Test the installer
-./bin/install-hooks.sh --dry-run balanced
+# From this directory
+./install.sh
 ```
 
-**Expected Output:**
-```
-✓ Node.js: v22.x.x
-✓ jq: jq-1.7
-✓ Claude Code detected
-[DRY RUN] Would create directories...
-✓ Dry run complete - no changes made
-```
-
-**If this works → proceed to Test 2**
+Select "1" (Project Mode) for the default test experience.
+Restart your shell afterwards to pick up the `rewind` command.
 
 ---
 
-## Test 2: Real Installation
+## 2. Prep a Test Project + Start Claude/Droid
 
 ```bash
-cd ~/rewind
-
-# Install for real
-./bin/install-hooks.sh balanced
-```
-
-**Expected Output:**
-```
-✓ Installed smart-checkpoint.sh to ~/.claude/hooks/
-✓ Installed smart-checkpoint.sh to ~/.factory/hooks/
-✓ Installed Node.js modules to ~/.checkpoint-rewind/
-✓ Installed tier configs to ~/.config/checkpoint-rewind/tiers/
-✓ Merged hooks into existing settings
-✓ Added CHECKPOINT_TIER to ~/.zshrc
-✅ Installation complete!
-```
-
-**Restart your shell:**
-```bash
-source ~/.zshrc  # or ~/.bashrc
-```
-
----
-
-## Test 3: Start Claude Code in Test Project
-
-```bash
-# Create a test project
 mkdir -p ~/test-checkpoint-demo
 cd ~/test-checkpoint-demo
 
-# Create a simple file
+# Initialize (optional, defaults to project mode anyway)
+rewind init
+
 echo "console.log('version 1');" > app.js
 
-# Start Claude Code
-claude
+claude   # or `droid`
 ```
+
+Keep the agent running for the next steps.
 
 ---
 
-## Test 4: Trigger Automatic Checkpoints
+## 3. Trigger Automatic Checkpoints
 
-**In Claude Code chat, type:**
-
+In chat:
 ```
 "Edit app.js and change 'version 1' to 'version 2'"
 ```
 
-**Wait for Claude to complete the edit.**
-
-**What should happen:**
-1. Hook fires BEFORE the edit
-2. `smart-checkpoint.sh` runs
-3. ClaudePoint creates checkpoint
-4. Edit proceeds normally
-
-**You won't see the checkpoint creation in the chat, but you'll see it in stderr if you run with --debug**
+What happens:
+1. SessionStart + PreToolUse hooks fire.
+2. `smart-checkpoint.sh` delegates to `hook-runner.js`.
+3. A snapshot is created in `.rewind/code/snapshots/<name>`.
 
 ---
 
-## Test 5: Verify Checkpoint Was Created
+## 4. Inspect Snapshots
 
-**Exit Claude Code** (type `quit` or Ctrl+D)
-
-```bash
-# Check for checkpoints
-claudepoint list
-```
-
-**Expected Output:**
-```
-Name: auto_before_edit_2025-11-16T19-XX-XX
-Description: Auto: Before Edit
-Files: 1
-Size: XXX bytes
-```
-
-**Also check conversation metadata:**
+After at least one edit, exit the agent.
 
 ```bash
-cat .claudepoint/conversation_metadata.json | jq
+# List checkpoints
+rewind list
 ```
 
-**Expected Output:**
-```json
-{
-  "auto_before_edit_2025-11-16T19-XX-XX": {
-    "agent": "claude-code",
-    "sessionId": "some-uuid",
-    "messageUuid": "msg-uuid",
-    "userPrompt": "Edit app.js and change..."
-  }
-}
+You should see entries like `auto_before_edit_... [just now]`.
+
+---
+
+## 5. Code Restore
+
+```bash
+rewind list            # choose a checkpoint
+rewind restore <name>
+
+cat app.js             # confirm rollback
 ```
 
 ---
 
-## Test 6: Anti-Spam Check
+## 6. Full Rewind (Code + Conversation)
 
-**Start Claude again:**
 ```bash
-claude
+rewind restore <name> --mode both
 ```
 
-**Make 3 rapid edits:**
-```
-"Edit app.js and change version 2 to version 3"
-```
-
-**Wait 5 seconds**
-
-```
-"Edit app.js and change version 3 to version 4"
-```
-
-**Wait 5 seconds**
-
-```
-"Edit app.js and change version 4 to version 5"
-```
-
-**Exit Claude, then check:**
-```bash
-claudepoint list | grep -c "auto_before"
-```
-
-**Expected:** Should see **1-2 checkpoints**, not 3!  
-**Why:** Anti-spam (30s cooldown) prevented rapid-fire checkpoints.
+If conversation metadata was captured (agent running in detected project path), this will truncate the session log.
 
 ---
 
-## Test 7: Code Restore
+## ✅ Success Checklist
 
-```bash
-# View checkpoints
-claudepoint list
+- `install.sh` runs without errors.
+- `rewind` command is available.
+- Automatic snapshots appear when agent edits files.
+- `rewind restore` correctly reverts files.
 
-# Restore to first checkpoint
-claudepoint undo
-
-# Check file content
-cat app.js
-```
-
-**Expected:** File shows `version 1` or `version 2` (earlier version)
-
----
-
-## 🎉 Success Criteria
-
-If all tests passed:
-
-✅ Installation completed without errors  
-✅ Hooks registered in `~/.claude/settings.json`  
-✅ Tier config exists in `~/.config/checkpoint-rewind/tiers/`  
-✅ Automatic checkpoint created on edit  
-✅ Conversation metadata stored  
-✅ Anti-spam prevents duplicate checkpoints  
-✅ Code restore works  
-
-**YOUR SYSTEM IS WORKING!** 🚀
-
----
-
-## 🔥 Quick Troubleshooting
-
-### "No checkpoints created"
-
-Check if hooks are active:
-```bash
-cat ~/.claude/settings.json | jq '.hooks'
-```
-
-Should show `PreToolUse` and `SessionStart` hooks.
-
-### "ClaudePoint not found"
-
-Install it:
-```bash
-npm install -g claudepoint
-```
-
-### "smart-checkpoint.sh not found"
-
-Check if hooks are installed:
-```bash
-ls -la ~/.claude/hooks/smart-checkpoint.sh
-ls -la ~/.factory/hooks/smart-checkpoint.sh
-```
-
-If missing, re-run installer:
-```bash
-./bin/install-hooks.sh balanced
-```
-
-### "Config not found" warning
-
-Check tier config exists:
-```bash
-ls ~/.config/checkpoint-rewind/tiers/
-cat ~/.config/checkpoint-rewind/tiers/balanced-tier.json
-```
-
----
-
-## 📊 What's Actually Happening
-
-```
-1. You type: "Edit app.js"
-   ↓
-2. Claude creates Edit tool call
-   ↓
-3. PreToolUse hook fires (from ~/.claude/settings.json)
-   ↓
-4. Runs: ~/.claude/hooks/smart-checkpoint.sh pre-modify "Edit" "$SESSION_ID"
-   ↓
-5. Script checks anti-spam (30s cooldown)
-   ↓
-6. Script calls: claudepoint create -d "Auto: Before Edit"
-   ↓
-7. Script gets conversation context (via SessionParser)
-   ↓
-8. Script stores metadata (via ConversationMetadata)
-   ↓
-9. Hook completes, Edit proceeds
-   ↓
-10. File modified ✅
-```
-
----
-
-## 🎯 Next Steps After Testing
-
-Once basic checkpointing works:
-
-1. **Try aggressive tier:**
-   ```bash
-   export CHECKPOINT_TIER=aggressive
-   # Restart Claude
-   ```
-
-2. **Test conversation rewind** (Phase 2 - not yet implemented)
-
-3. **Test tmux auto-resume** (Phase 3 - not yet implemented)
-
----
-
-## ⏱️ Time Required
-
-- **Prerequisites check:** 2 minutes
-- **Installation:** 1 minute
-- **Testing:** 5 minutes
-- **Total:** ~8 minutes
-
----
-
-**Questions? Issues?**
-
-Check `ARCHITECTURE.md` for how it all works.
-
----
-
-## 🎨 Advanced: Project-Level Install
-
-For project-specific hooks (stored in the repo):
-
-```bash
-cd ~/your-project
-~/rewind/bin/install-hooks.sh --project balanced
-```
-
-This installs to:
-- `./.claude/hooks/` and `./.factory/hooks/` (project-local)
-- `./.checkpoint-rewind/` (libraries)
-
-Benefits:
-- Team shares same checkpoint configuration
-- Version control the hooks setup
-- Different tiers per project
-
-**Note:** Uses `$CLAUDE_PROJECT_DIR` and `$FACTORY_PROJECT_DIR` env vars for absolute paths.
+If all of the above pass, the Rewind integration is healthy. 🚀

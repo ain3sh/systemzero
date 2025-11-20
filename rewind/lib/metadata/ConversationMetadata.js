@@ -3,10 +3,10 @@
 /**
  * ConversationMetadata - Store conversation context for checkpoints
  * 
- * Extends ClaudePoint checkpoints with conversation metadata so we can
+ * Extends Rewind checkpoints with conversation metadata so we can
  * later truncate conversations to match code checkpoints.
  * 
- * Storage: .claudepoint/conversation_metadata.json
+ * Storage: .rewind/conversation/metadata.json
  * 
  * Format:
  * {
@@ -28,8 +28,8 @@ import path from 'path';
 export class ConversationMetadata {
   constructor(projectRoot = process.cwd()) {
     this.projectRoot = path.resolve(projectRoot);
-    this.claudepointDir = path.join(this.projectRoot, '.claudepoint');
-    this.metadataFile = path.join(this.claudepointDir, 'conversation_metadata.json');
+    this.baseDir = path.join(this.projectRoot, '.rewind', 'conversation');
+    this.metadataFile = path.join(this.baseDir, 'metadata.json');
   }
   
   /**
@@ -52,7 +52,7 @@ export class ConversationMetadata {
    */
   async save(metadata) {
     // Ensure directory exists
-    await fs.mkdir(this.claudepointDir, { recursive: true });
+    await fs.mkdir(this.baseDir, { recursive: true });
     
     // Write with pretty formatting for human readability
     await fs.writeFile(
@@ -117,7 +117,7 @@ export class ConversationMetadata {
    */
   async cleanup() {
     const metadata = await this.load();
-    const snapshotsDir = path.join(this.claudepointDir, 'snapshots');
+    const snapshotsDir = path.join(this.projectRoot, '.rewind', 'code', 'snapshots');
     
     try {
       const checkpoints = await fs.readdir(snapshotsDir);

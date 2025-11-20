@@ -4,6 +4,9 @@ AGENT_REMINDERS.md
 # Test artifacts
 test-checkpoint-demo/
 
+# Runtime checkpoint data
+.rewind/
+
 # Backup files
 *.backup.*
 *.old

@@ -1,4 +1,5 @@
 import { RewindController } from '../core/RewindController.js';
+import os from 'os';
 
 /**
  * HookHandler - Intelligent hook processing logic
@@ -24,7 +25,7 @@ export class HookHandler {
    */
   getStateDir() {
     const agent = this.controller.contextManager.detectAgent();
-    const homeDir = require('os').homedir();
+    const homeDir = os.homedir();
     
     switch (agent) {
       case 'claude-code':

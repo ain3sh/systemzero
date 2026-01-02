@@ -1,6 +1,6 @@
 # Prompt Conflict Checker
 
-**UserPromptSubmit hook for Claude Code and Factory Droid CLI** that blocks long prompts containing potentially conflicting instructions, saves them for analysis, and asks you to check for conflicts before proceeding. Prevents wasted context and confused iterations on complex prompts.
+**UserPromptSubmit hook for Claude Code and Factory Droid CLI** that blocks long prompts, saves them for conflict analysis, and prompts you to check before proceeding. Prevents wasted context on confused iterations.
 
 ---
 
@@ -10,9 +10,9 @@ When you submit a prompt exceeding 1800 tokens (configurable):
 
 1. **Blocks submission** (erases from context, saves ~95% tokens)
 2. **Saves prompt** to `/tmp/prompt-conflicts/<timestamp>-<session>-<hash>.md`
-3. **Creates symlink** at `/tmp/prompt-conflicts/latest.md` for easy access
-4. **Copies `/check-conflicts` to clipboard** for instant submission
-5. **Slash command expands** to instructions asking the agent to read the saved file and use `ApplyPatch` to highlight conflicts with git-diff colors (green for one instruction, red for contradictions)
+3. **Creates symlink** at `/tmp/prompt-conflicts/latest.md`
+4. **Copies `/check-conflicts` to clipboard**
+5. **Slash command** tells the agent to read the saved file and highlight conflicts with git-diff colors
 
 You see conflicts **before** any code is touched.
 
@@ -23,13 +23,14 @@ You see conflicts **before** any code is touched.
 ### Claude Code
 
 ```bash
-# Copy hook and slash command to project
 mkdir -p .claude/hooks .claude/commands
 cp .claude/hooks/prompt_conflict_identifier.py .claude/hooks/
 cp .claude/commands/check-conflicts.md .claude/commands/
 chmod +x .claude/hooks/prompt_conflict_identifier.py
+```
 
-# Add to .claude/settings.json
+Add to `.claude/settings.json`:
+```json
 {
   "env": { "LONG_PROMPT_THRESHOLD": "1800" },
   "hooks": {
@@ -47,13 +48,14 @@ chmod +x .claude/hooks/prompt_conflict_identifier.py
 ### Factory Droid
 
 ```bash
-# Copy hook and slash command to project (just rename directory)
 mkdir -p .factory/hooks .factory/commands
 cp .claude/hooks/prompt_conflict_identifier.py .factory/hooks/
 cp .claude/commands/check-conflicts.md .factory/commands/
 chmod +x .factory/hooks/prompt_conflict_identifier.py
+```
 
-# Add to .factory/settings.json (same format as Claude Code)
+Add to `.factory/settings.json`:
+```json
 {
   "env": { "LONG_PROMPT_THRESHOLD": "1800" },
   "hooks": {
@@ -68,13 +70,11 @@ chmod +x .factory/hooks/prompt_conflict_identifier.py
 }
 ```
 
-**Note:** Hook is CLI-agnostic. Both CLIs implement identical UserPromptSubmit protocols.
+Both CLIs implement identical `UserPromptSubmit` protocols.
 
 ---
 
 ## Usage
-
-**Normal workflow:**
 
 1. Submit long prompt (>1800 tokens)
 2. Hook blocks and displays:
@@ -84,77 +84,69 @@ chmod +x .factory/hooks/prompt_conflict_identifier.py
    /check-conflicts
    ────────────────────────────────────────────────
    ```
-3. Paste (Ctrl+V) and press Enter
-4. Agent analyzes saved prompt, shows conflicts using ApplyPatch git-diff highlighting
-5. Fix conflicts in your prompt and resubmit
+3. Paste and Enter
+4. Agent analyzes saved prompt, highlights conflicts
+5. Fix conflicts and resubmit
 
-**Override check for specific prompt:**
-
+**Override for a specific prompt:**
 ```
 # skip-conflict-check
-<your long prompt here that won't be checked>
+<your long prompt here>
 ```
 
 ---
 
 ## Configuration
 
-Set environment variables in your CLI's `settings.json` `env` block:
+Environment variables (set in `settings.json` `env` block):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `LONG_PROMPT_THRESHOLD` | `1800` | Token count before blocking |
-| `PROMPT_CONFLICT_ALWAYS_ON` | `0` | Force check all prompts (ignore threshold) |
-| `PROMPT_CONFLICT_ALLOW_OVERRIDE` | `1` | Enable `# skip-conflict-check` prefix override |
+| `PROMPT_CONFLICT_ALWAYS_ON` | `0` | Check all prompts (ignore threshold) |
+| `PROMPT_CONFLICT_ALLOW_OVERRIDE` | `1` | Enable `# skip-conflict-check` override |
 | `PROMPT_CONFLICT_TMP_DIR` | `/tmp/prompt-conflicts` | Directory for saved prompts |
 
 ---
 
 ## How It Works
 
-**Token counting:** Uses tiktoken with `o200k_base` encoding (same as GPT-4/Claude), with module-level encoder binding for speed. Falls back to character-based estimation if tiktoken unavailable.
+**Token counting:** tiktoken with `o200k_base` encoding, module-level encoder binding. Falls back to char estimate (~4 chars/token) if unavailable.
 
-**File storage:** Saves prompts to timestamped files (`<timestamp>-<session>-<hash>.md`) and maintains a `latest.md` symlink pointing to the most recent, so the slash command always references the same path.
+**File storage:** Timestamped files (`<timestamp>-<session>-<hash>.md`) with `latest.md` symlink so slash command always references the same path.
 
-**Clipboard:** Auto-detects platform (macOS/Linux/WSL) and attempts `pbcopy`, `clip.exe`, `xclip`, or `xsel`. Degrades gracefully if clipboard unavailable.
+**Clipboard:** Auto-detects platform (macOS/Linux/WSL), tries `pbcopy`/`clip.exe`/`xclip`/`xsel`. Degrades gracefully.
 
-**Python 3.13 optimizations:** Match/case for platform detection, dataclass slots for memory efficiency, frozen dataclasses, cached computations (skip prefix lowercase, platform detection), minimal allocations.
+**Optimizations:** match/case, dataclass slots, frozen dataclasses, cached computations.
 
 ---
 
 ## Requirements
 
-- **Python 3.13+** (uses modern syntax: match/case, slots, native type hints)
+- **Python 3.10+** (match/case, slots, native type hints)
 - **tiktoken** (`pip install tiktoken`)
-- **Clipboard tools (optional):** `pbcopy` (macOS) / `clip.exe` (Windows) / `xclip` or `xsel` (Linux)
+- **Clipboard (optional):** `pbcopy` (macOS) / `clip.exe` (Windows/WSL) / `xclip` or `xsel` (Linux)
 
 ---
 
 ## Why This Matters
 
-For complex prompts with multiple instructions (e.g., "do X, but also do Y, make it Z-compliant, refactor for A, ensure B compatibility"), conflicting requirements cause:
+Complex prompts with multiple instructions ("do X, also Y, make it Z-compliant, refactor for A, ensure B compatibility") often contain conflicting requirements. This causes:
 
 - Wasted context on confused iterations
-- Code that satisfies some requirements but breaks others
-- Time spent debugging agent confusion vs actual bugs
+- Code satisfying some requirements but breaking others
+- Time debugging agent confusion vs actual bugs
 
-LLMs are excellent at **identifying** conflicts when explicitly asked. This hook ensures you leverage that capability **before** context is burned, not after. On a 2000-token prompt, you save ~1950 tokens (98% reduction) by submitting `/check-conflicts` (49 tokens) instead.
+LLMs are excellent at identifying conflicts when explicitly asked. This hook ensures you leverage that **before** context is burned. A 2000-token prompt costs ~1950 tokens; `/check-conflicts` costs ~49 tokens (98% reduction).
 
 ---
 
 ## References
 
-- ![GPT-5.1 Prompting Guide from OpenAI](https://cookbook.openai.com/examples/gpt-5/gpt-5-1_prompting_guide)
-
-- ![Anthropic Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks.md)
-    - ![Claude Code Default Tools Info](https://code.claude.com/docs/en/settings#tools-available-to-claude)
-    - ![Tool Control with Hooks in Claude Code](https://code.claude.com/docs/en/settings#extending-tools-with-hooks)
-
-- ![Factory Droid CLI Hooks Reference](https://docs.factory.ai/reference/hooks-reference.md)
-    - ![Droid Default Tools Info](https://docs.factory.ai/cli/configuration/custom-droids#tool-categories-→-concrete-tools)
-    - ![Droid Tool Naming Differences](https://docs.factory.ai/cli/configuration/custom-droids#handling-tool-validation-errors)
-
-- ![OpenAI Codex CLI ApplyPatch Tool Implementation](https://github.com/openai/codex/raw/326c1e0a7eaefaf675e41c66e0b1c8033cbfdb7c/codex-rs/core/src/tools/runtimes/apply_patch.rs)
+- [GPT-5.1 Prompting Guide](https://cookbook.openai.com/examples/gpt-5/gpt-5-1_prompting_guide)
+- [Claude Code Hooks Reference](https://code.claude.com/docs/en/hooks.md)
+- [Factory Droid Hooks Reference](https://docs.factory.ai/reference/hooks-reference.md)
+- [OpenAI Codex ApplyPatch Implementation](https://github.com/openai/codex/raw/326c1e0a7eaefaf675e41c66e0b1c8033cbfdb7c/codex-rs/core/src/tools/runtimes/apply_patch.rs)
 
 ---
 

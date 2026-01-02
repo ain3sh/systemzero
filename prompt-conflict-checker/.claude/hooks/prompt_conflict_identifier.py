@@ -5,38 +5,40 @@ Works identically with Claude Code and Factory Droid CLI.
 When a prompt exceeds the token threshold, this hook blocks submission,
 saves the prompt to /tmp/prompt-conflicts/, and instructs the user to
 submit a short slash command instead that will ask the agent to analyze
-the saved prompt for conflicts using the built-in Edit/ApplyPatch tool.
+the saved prompt for conflicts.
 """
+
+from __future__ import annotations
 
 import hashlib
 import json
 import os
-from pathlib import Path
 import subprocess
 import sys
 import time
 from dataclasses import dataclass
-from typing import Literal
+from pathlib import Path
+from typing import Any, NoReturn
 
 # ============================================================================
-# Token Counting (tiktoken-based, optimized for performance)
+# Token Counting (tiktoken-based with fallback)
 # ============================================================================
 
 try:
     import tiktoken
-    _enc = tiktoken.get_encoding("o200k_base")
-    _encode_ordinary = _enc.encode_ordinary
+    _ENC = tiktoken.get_encoding("o200k_base")
+    _encode = _ENC.encode_ordinary
     TIKTOKEN_AVAILABLE = True
 except ImportError:
     TIKTOKEN_AVAILABLE = False
+    _encode = None
 
 
 def count_tokens(text: str) -> int:
-    """Count tokens using o200k_base encoding.
-
-    Falls back to rough character-based estimation if tiktoken unavailable.
-    """
-    return len(_encode_ordinary(text)) if TIKTOKEN_AVAILABLE else len(text) >> 2
+    """Count tokens using o200k_base encoding, fallback to char estimate."""
+    if TIKTOKEN_AVAILABLE and _encode:
+        return len(_encode(text))
+    return len(text) >> 2  # ~4 chars per token estimate
 
 
 # ============================================================================
@@ -48,12 +50,37 @@ _IS_WSL = "microsoft" in os.uname().release.lower() if hasattr(os, "uname") else
 
 
 # ============================================================================
-# Configuration
+# Environment Helpers
 # ============================================================================
 
-# Frozenset for faster membership testing
 _TRUE_VALUES = frozenset({"1", "true", "yes", "on"})
 
+
+def env_bool(key: str, default: bool = False) -> bool:
+    """Get boolean env var."""
+    val = os.environ.get(key, "").lower()
+    return val in _TRUE_VALUES if val else default
+
+
+def env_int(key: str, default: int) -> int:
+    """Get integer env var with default."""
+    raw = os.environ.get(key)
+    if raw is None:
+        return default
+    try:
+        return int(raw)
+    except ValueError:
+        return default
+
+
+def env_path(key: str, default: str) -> Path:
+    """Get path env var with default."""
+    return Path(os.environ.get(key, default))
+
+
+# ============================================================================
+# Configuration
+# ============================================================================
 
 @dataclass(slots=True, frozen=True)
 class Config:
@@ -64,26 +91,17 @@ class Config:
     allow_override: bool
     tmp_dir: Path
     skip_prefix: str
-    skip_prefix_lower: str  # Cached lowercase version
+    skip_prefix_lower: str
 
 
 def load_config() -> Config:
     """Load configuration from environment with safe defaults."""
-    env = os.environ
-    raw_threshold = env.get("LONG_PROMPT_THRESHOLD")
-
-    try:
-        token_threshold = int(raw_threshold) if raw_threshold else 1800
-    except ValueError:
-        token_threshold = 1800
-
     skip_prefix = "# skip-conflict-check"
-
     return Config(
-        token_threshold=token_threshold,
-        always_on=env.get("PROMPT_CONFLICT_ALWAYS_ON", "").lower() in _TRUE_VALUES,
-        allow_override=env.get("PROMPT_CONFLICT_ALLOW_OVERRIDE", "").lower() in _TRUE_VALUES,
-        tmp_dir=Path(env.get("PROMPT_CONFLICT_TMP_DIR", "/tmp/prompt-conflicts")),
+        token_threshold=env_int("LONG_PROMPT_THRESHOLD", 1800),
+        always_on=env_bool("PROMPT_CONFLICT_ALWAYS_ON", False),
+        allow_override=env_bool("PROMPT_CONFLICT_ALLOW_OVERRIDE", True),
+        tmp_dir=env_path("PROMPT_CONFLICT_TMP_DIR", "/tmp/prompt-conflicts"),
         skip_prefix=skip_prefix,
         skip_prefix_lower=skip_prefix.lower(),
     )
@@ -94,33 +112,77 @@ def load_config() -> Config:
 # ============================================================================
 
 @dataclass(slots=True, frozen=True)
-class HookContext:
-    """Normalized view of UserPromptSubmit hook input."""
+class HookInput:
+    """Parsed UserPromptSubmit hook input."""
 
+    session_id: str
+    transcript_path: str
+    cwd: str
+    permission_mode: str
     prompt: str
-    session_id: str | None
 
 
-class HookParseError(Exception):
-    """Raised when hook JSON input cannot be parsed."""
+class HookInputError(Exception):
+    """Raised when hook input cannot be parsed."""
 
 
-def parse_hook_input() -> HookContext:
+def read_hook_input() -> HookInput:
     """Parse UserPromptSubmit JSON from stdin."""
-    raw_text = sys.stdin.read().strip()
-    if not raw_text:
-        raise HookParseError("No hook input received on stdin")
+    raw = sys.stdin.read().strip()
+    if not raw:
+        raise HookInputError("No input received on stdin")
 
     try:
-        payload = json.loads(raw_text)
-    except json.JSONDecodeError as exc:
-        raise HookParseError(f"Invalid JSON hook input: {exc}") from exc
+        data = json.loads(raw)
+    except json.JSONDecodeError as e:
+        raise HookInputError(f"Invalid JSON: {e}") from e
 
-    prompt = payload.get("prompt")
+    if not isinstance(data, dict):
+        raise HookInputError("Hook input must be a JSON object")
+
+    prompt = data.get("prompt")
     if not isinstance(prompt, str):
-        raise HookParseError("Hook input JSON missing string 'prompt' field")
+        raise HookInputError("Missing 'prompt' field in hook input")
 
-    return HookContext(prompt=prompt, session_id=payload.get("session_id"))
+    return HookInput(
+        session_id=data.get("session_id", ""),
+        transcript_path=data.get("transcript_path", ""),
+        cwd=data.get("cwd", ""),
+        permission_mode=data.get("permission_mode", "default"),
+        prompt=prompt,
+    )
+
+
+# ============================================================================
+# Hook Output Emission
+# ============================================================================
+
+def emit_block(reason: str) -> NoReturn:
+    """Emit blocking decision and exit."""
+    print(json.dumps({"decision": "block", "reason": reason}))
+    sys.exit(0)
+
+
+def emit_context(context: str) -> NoReturn:
+    """Emit additional context to inject into the conversation and exit."""
+    print(json.dumps({
+        "hookSpecificOutput": {
+            "hookEventName": "UserPromptSubmit",
+            "additionalContext": context,
+        },
+    }))
+    sys.exit(0)
+
+
+def exit_allow() -> NoReturn:
+    """Exit allowing the prompt to proceed (no output needed)."""
+    sys.exit(0)
+
+
+def exit_error(message: str) -> NoReturn:
+    """Exit with non-blocking error (code 1, stderr)."""
+    print(message, file=sys.stderr)
+    sys.exit(1)
 
 
 # ============================================================================
@@ -131,21 +193,19 @@ def parse_hook_input() -> HookContext:
 class StoredPrompt:
     """Information about a prompt saved to disk."""
 
-    path: str
+    path: Path
+    filename: str
 
 
-def store_prompt(prompt: str, config: Config, session_id: str | None) -> StoredPrompt:
-    """Save prompt to timestamped file and create/update latest.md symlink."""
-    # Ensure directory exists
+def store_prompt(prompt: str, config: Config, session_id: str) -> StoredPrompt:
+    """Save prompt to timestamped file and create latest.md symlink."""
     config.tmp_dir.mkdir(parents=True, exist_ok=True)
 
-    # Generate filename: timestamp-session-hash.md
     timestamp = int(time.time())
     sess_short = (session_id or "nosession").replace(os.sep, "_")[:8]
     digest = hashlib.sha256(prompt.encode()).hexdigest()[:10]
     filename = f"{timestamp}-{sess_short}-{digest}.md"
 
-    # Write prompt file
     file_path = config.tmp_dir / filename
     file_path.write_text(prompt, encoding="utf-8")
 
@@ -156,13 +216,11 @@ def store_prompt(prompt: str, config: Config, session_id: str | None) -> StoredP
         try:
             latest_path.symlink_to(filename)
         except OSError:
-            # Fallback when symlinks are not available or permitted
             latest_path.write_text(prompt, encoding="utf-8")
     except OSError:
-        # Symlink or fallback file creation can fail on some systems, non-fatal
         pass
 
-    return StoredPrompt(path=str(file_path))
+    return StoredPrompt(path=file_path, filename=filename)
 
 
 # ============================================================================
@@ -170,10 +228,7 @@ def store_prompt(prompt: str, config: Config, session_id: str | None) -> StoredP
 # ============================================================================
 
 def copy_to_clipboard(text: str) -> bool:
-    """Attempt to copy text to system clipboard.
-
-    Returns True if successful, False otherwise.
-    """
+    """Copy text to system clipboard. Returns True on success."""
     text_bytes = text.encode()
     devnull = subprocess.DEVNULL
 
@@ -188,7 +243,8 @@ def copy_to_clipboard(text: str) -> bool:
                     stderr=devnull,
                 )
                 return True
-            case "win32" | _ if _IS_WSL:
+
+            case "win32":
                 subprocess.run(
                     ["clip.exe"],
                     input=text_bytes,
@@ -197,7 +253,18 @@ def copy_to_clipboard(text: str) -> bool:
                     stderr=devnull,
                 )
                 return True
-            case _:  # Linux
+
+            case _ if _IS_WSL:
+                subprocess.run(
+                    ["clip.exe"],
+                    input=text_bytes,
+                    check=True,
+                    stdout=devnull,
+                    stderr=devnull,
+                )
+                return True
+
+            case _:  # Linux native
                 for cmd in (
                     ["xclip", "-selection", "clipboard"],
                     ["xsel", "--clipboard", "--input"],
@@ -222,45 +289,32 @@ def copy_to_clipboard(text: str) -> bool:
 # Main Hook Logic
 # ============================================================================
 
-Action = Literal["allow", "block"]
-
-
-def handle_prompt(
-    ctx: HookContext,
-    config: Config,
-) -> tuple[Action, dict | None]:
-    """Decide whether to block a prompt and return appropriate JSON output.
-
-    Returns (action, json_output) where:
-    - action is "allow" or "block"
-    - json_output is the dict to emit as JSON (or None for simple allow)
-    """
-    prompt = ctx.prompt
+def handle_prompt(hook_input: HookInput, config: Config) -> None:
+    """Decide whether to block. Exits directly on block, returns on allow."""
+    prompt = hook_input.prompt
     stripped = prompt.lstrip()
 
-    # Optional override: skip conflict checking with special prefix
+    # Optional override: skip checking with special prefix
     if config.allow_override and stripped.lower().startswith(config.skip_prefix_lower):
-        return "allow", None
+        return  # allow
 
     token_count = count_tokens(prompt)
 
-    # Short prompts always pass through
+    # Short prompts pass through
     if not config.always_on and token_count <= config.token_threshold:
-        return "allow", None
+        return  # allow
 
-    # Long prompt detected - save to file
-    stored = store_prompt(prompt, config, ctx.session_id)
+    # Long prompt detected - save to file and block
+    stored = store_prompt(prompt, config, hook_input.session_id)
 
-    # Prepare clipboard shortcut
     slash_command = "/check-conflicts"
     clipboard_hint = (
-        f"\n✓ Copied to clipboard: {slash_command}\n   Just paste (Ctrl+V / Cmd+V) and press Enter!"
+        f"\n✓ Copied: {slash_command}\n   Paste and press Enter!"
         if copy_to_clipboard(slash_command)
         else f"\n   Copy and submit: {slash_command}"
     )
 
-    # Block with helpful message
-    reason = f"""Prompt too long ({token_count:,} tokens > {config.token_threshold:,} threshold).
+    reason = f"""Prompt blocked ({token_count:,} tokens > {config.token_threshold:,} threshold).
 Saved to: {stored.path}
 {clipboard_hint}
 
@@ -268,33 +322,25 @@ Saved to: {stored.path}
 {slash_command}
 ────────────────────────────────────────────────
 
-This will ask the agent to analyze the saved prompt for conflicting
-or ambiguous instructions using Edit/ApplyPatch with git-diff highlighting.
+This asks the agent to analyze the saved prompt for conflicting
+or ambiguous instructions.
 """
 
-    return "block", {"decision": "block", "reason": reason}
+    emit_block(reason)  # exits
 
 
-def main() -> int:
-    """Entry point for the hook script."""
+def main() -> NoReturn:
+    """Entry point."""
     config = load_config()
 
-    # Parse hook input
     try:
-        ctx = parse_hook_input()
-    except HookParseError as exc:
-        # Non-blocking error: just log to stderr and allow
-        print(f"[prompt_conflict] Hook input error: {exc}", file=sys.stderr)
-        return 1
+        hook_input = read_hook_input()
+    except HookInputError as e:
+        exit_error(f"[prompt_conflict] {e}")
 
-    # Decide whether to block
-    action, output = handle_prompt(ctx, config)
-
-    if action == "block" and output:
-        print(json.dumps(output))
-
-    return 0
+    handle_prompt(hook_input, config)
+    exit_allow()
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    main()

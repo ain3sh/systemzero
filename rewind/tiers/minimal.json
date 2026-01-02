@@ -1,0 +1,30 @@
+{
+  "tier": "minimal",
+  "description": "Session start checkpoints only. Lowest overhead.",
+  
+  "runtime": {
+    "antiSpam": {
+      "enabled": false,
+      "minIntervalSeconds": 0
+    },
+    "significance": {
+      "enabled": false,
+      "minChangeSize": 0
+    }
+  },
+  
+  "hooks": {
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint session-start",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

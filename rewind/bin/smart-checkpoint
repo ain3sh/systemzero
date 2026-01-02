@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+# System Zero Rewind - Hook entry point
+# This shell shim calls the Python hook handler.
+#
+# Usage: smart-checkpoint <action>
+# Actions: session-start, pre-tool-use, post-bash, stop
+#
+# Hook protocol:
+# - Exit 0: Allow action
+# - Exit 1: Non-blocking error (stderr shown to user)
+# - Exit 2: Block action (stderr shown to agent)
+
+set -euo pipefail
+
+# Get script directory
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
+
+# Action argument
+ACTION="${1:-}"
+
+if [[ -z "$ACTION" ]]; then
+    echo "Usage: smart-checkpoint <action>" >&2
+    echo "Actions: session-start, pre-tool-use, post-bash, stop" >&2
+    exit 1
+fi
+
+# Run the Python hook handler
+# PYTHONPATH ensures the package is importable
+export PYTHONPATH="${PACKAGE_DIR}:${PYTHONPATH:-}"
+
+# Use python3 explicitly (more reliable than just python)
+exec python3 -m src.hooks "$ACTION"

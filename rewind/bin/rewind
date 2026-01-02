@@ -1,0 +1,15 @@
+#!/usr/bin/env python3
+"""System Zero Rewind - CLI entry point."""
+
+import sys
+from pathlib import Path
+
+# Add package to path when running directly
+package_dir = Path(__file__).parent.parent
+if str(package_dir) not in sys.path:
+    sys.path.insert(0, str(package_dir))
+
+from src.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())

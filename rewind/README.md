@@ -1,89 +1,88 @@
-# System Zero Rewind ⏪
+# System Zero - Agent Rewind
 
-> **Seamless, atomic checkpointing for AI coding agents.**  
-> Instantly roll back mistakes—both code AND conversation context—without leaving your flow.
+Rewind is a checkpoint + jump tool for AI coding agents (Claude Code, Factory Droid).
 
-## 🚀 Install
+It snapshots **code** and (when available) the agent **conversation transcript**, so you can:
 
-One command. No dependencies (except Node.js + jq).
+- roll your repo back to a known-good state
+- jump to a prior conversation state by creating a **forked agent session** (safe by default)
+
+## What it does
+
+- **Automatic checkpoints** via hooks before file-modifying tools
+- **Manual checkpoints** anytime
+- **Jump back**: restore code + create a forked session transcript you can select in your agent UI/CLI
+- **Zero deps**: Python 3.9+ stdlib only
+
+## Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/ain3sh/systemzero/main/rewind/install.sh | bash
+./install.sh
 ```
 
-This will:
-1.  Install the rewind engine to `~/.rewind/system`.
-2.  Link the `rewind` command to `~/.local/bin/rewind`.
-3.  Register hooks in Claude/Droid settings.
-4.  Ask if you prefer **Project** (default) or **Global** storage.
+`install.sh`:
 
----
+- installs to `~/.rewind/system/`
+- symlinks `~/.local/bin/rewind`
+- lets you pick a tier (minimal/balanced/aggressive)
+- can register hooks into `~/.claude/settings.json` and/or `~/.factory/settings.json`
 
-## ✨ Usage
+## Quickstart
 
-Once installed, **you don't need to do anything.** Checkpoints happen automatically when your agent makes edits.
-
-### 1. Just Work
-Use Claude or Droid as normal.
-> "Refactor the authentication logic."
-
-The system automatically snapshots code + context before changes are applied.
-
-### 2. Undo a mistake
-If the agent goes off the rails:
 ```bash
-rewind undo
-```
+# Make a manual checkpoint
+rewind save "before refactor"
 
-### 3. Restore a specific point
-```bash
+# Jump back (interactive picker)
+rewind
+
+# Or jump non-interactively
+rewind jump last
+rewind jump prev
+rewind jump 3
+
+# Rewind the last prompt (non-interactive, fast)
+rewind back 1
+
+# Rewind the last 2 prompts and also restore code
+rewind back 2 --both
+
+# See recent checkpoints
 rewind list
-rewind restore <name> --mode both
 ```
-*(Modes: `both` [default], `code`, `context`)*
 
----
+## How “chat rewind” works
 
-## 🛠 Configuration
+Rewind does not try to mutate your current session transcript by default.
 
-### Storage Modes
-Rewind supports two storage strategies. The installer sets your default, but you can switch per-project.
+Instead, it creates a **new forked session JSONL** next to the original transcript file and (best-effort) prefixes the session title with `[Fork] `.
+Then you switch sessions using your agent’s normal session selector.
 
-1.  **Project Mode** (Default)
-    *   Checkpoints stored in `<project>/.rewind/`
-    *   Portable with the repo.
-    *   Best for: Self-contained projects.
+If you want to rewind by conversation turns (user prompts) without using the TUI, use:
 
-2.  **Global Mode**
-    *   Checkpoints stored in `~/.rewind/storage/<project_hash>/`
-    *   Keeps your project directory clean.
-    *   Best for: Sensitive/Work repos where you can't add folders.
-
-**Switching Modes:**
-No need to edit files manually.
 ```bash
-cd my-project
-rewind init --mode global
+rewind back <n>
 ```
 
-### Settings
-View or edit configuration:
+To rewrite the current transcript in-place (destructive), use:
+
 ```bash
-rewind config
-rewind config antiSpam.minIntervalSeconds 60
+rewind back <n> --in-place
 ```
 
----
+This always writes a safety backup to `.agent/rewind/transcript-backup/`.
 
-## 🤖 Supported Agents
-- **Claude Code**: Full support (hooks + context).
-- **Droid CLI**: Full support.
+## Docs
 
-## 🏗 Architecture
-System Zero Rewind separates **Execution** (the tool) from **State** (the data).
-- **Engine**: Global (`~/.rewind/system`). Updates independently of your projects.
-- **Hooks**: Lightweight shims pointing to the global engine.
-- **Data**: Local or Global, your choice.
+- `docs/USAGE.md`
+- `docs/ARCHITECTURE.md`
 
-## License
-MIT
+## Extending agent support
+
+Agent-specific behavior is defined in `src/agents/schemas/` (JSON). Adding a new agent is intended to be mostly schema work.
+
+## Development
+
+```bash
+python3 -m pytest tests/ -v
+```

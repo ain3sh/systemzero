@@ -1,0 +1,69 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "systemzero-rewind"
+version = "1.0.0"
+description = "Automatic checkpointing for AI coding agents"
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "ain3sh"}
+]
+requires-python = ">=3.9"
+classifiers = [
+    "Development Status :: 1 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Software Development :: Version Control",
+]
+keywords = ["ai", "agents", "checkpointing", "version-control", "claude", "droid"]
+
+# Zero external dependencies - stdlib only
+dependencies = []
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0",
+    "pytest-cov>=4.0",
+]
+
+[project.scripts]
+rewind = "src.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/ain3sh/systemzero"
+Repository = "https://github.com/ain3sh/systemzero"
+Issues = "https://github.com/ain3sh/systemzero/issues"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["src*"]
+
+[tool.setuptools.package-data]
+src = ["py.typed", "agents/schemas/*.json"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_functions = ["test_*"]
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["src"]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+]

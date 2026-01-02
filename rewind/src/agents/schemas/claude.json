@@ -1,0 +1,35 @@
+{
+  "id": "claude",
+  "display_name": "Claude Code",
+  "detection": {
+    "min_score": 5,
+    "score_rules": [
+      {"when": {"json_path_exists": "$.transcript_path"}, "score": 2},
+      {"when": {"json_path_matches": ["$.transcript_path", "\\/.claude\\/"]}, "score": 6},
+      {"when": {"env_exists": "CLAUDE_PROJECT_DIR"}, "score": 4}
+    ]
+  },
+  "env": {
+    "env_file_var": "CLAUDE_ENV_FILE",
+    "project_dir_var": "CLAUDE_PROJECT_DIR"
+  },
+  "hooks": {
+    "event_name_paths": ["$.hook_event_name", "$.hookEventName"],
+    "session_id_paths": ["$.session_id", "$.sessionId"],
+    "transcript_path_paths": ["$.transcript_path", "$.transcriptPath"],
+    "cwd_paths": ["$.cwd"],
+    "tool_name_paths": ["$.tool_name", "$.tool.name"],
+    "tool_input_paths": ["$.tool_input", "$.tool.input"],
+    "event_name_map": {
+      "session_start": "SessionStart",
+      "pre_tool_use": "PreToolUse",
+      "post_tool_use": "PostToolUse",
+      "user_prompt_submit": "UserPromptSubmit"
+    }
+  },
+  "transcript": {
+    "path_regexes": ["\\/.claude\\/"],
+    "last_event_id_fields": ["uuid"],
+    "title_prefix": {"enabled": true, "json_path": "$.title"}
+  }
+}

@@ -1,0 +1,54 @@
+{
+  "tier": "balanced",
+  "description": "Smart checkpointing before file edits with 30s anti-spam. Recommended for most users.",
+  
+  "runtime": {
+    "antiSpam": {
+      "enabled": true,
+      "minIntervalSeconds": 30
+    },
+    "significance": {
+      "enabled": true,
+      "minChangeSize": 50,
+      "criticalFiles": [
+        "package.json",
+        "requirements.txt", 
+        "Dockerfile",
+        "docker-compose.yml",
+        "tsconfig.json",
+        "pyproject.toml",
+        "Cargo.toml",
+        "go.mod",
+        "*.config.js",
+        "*.config.ts"
+      ]
+    }
+  },
+  
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Create",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint pre-tool-use",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint session-start",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

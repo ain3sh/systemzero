@@ -1,0 +1,77 @@
+{
+  "tier": "aggressive",
+  "description": "Maximum safety - checkpoints on edits, bash commands, destructive prompts, and session end.",
+  
+  "runtime": {
+    "antiSpam": {
+      "enabled": true,
+      "minIntervalSeconds": 15
+    },
+    "significance": {
+      "enabled": true,
+      "minChangeSize": 25,
+      "criticalFiles": ["*"]
+    }
+  },
+  
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Create",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint pre-tool-use",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint post-bash",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint analyze-prompt",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint session-start",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "~/.rewind/system/smart-checkpoint stop",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  }
+}

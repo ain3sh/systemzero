@@ -29,7 +29,7 @@ class HookHandler:
     """Handles hook events and decides when to checkpoint."""
     
     # Tools that trigger checkpoints
-    CHECKPOINT_TOOLS = {"Edit", "Write", "MultiEdit", "NotebookEdit", "Create"}
+    CHECKPOINT_TOOLS = {"Create", "Edit", "MultiEdit", "NotebookEdit"}
     
     # State file for anti-spam
     STATE_FILE = ".agent/rewind/hook-state.json"

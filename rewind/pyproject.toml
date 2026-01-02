@@ -37,7 +37,7 @@ dev = [
 ]
 
 [project.scripts]
-rewind = "src.cli:main"
+rewind = "src.app.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/ain3sh/systemzero"
@@ -49,7 +49,12 @@ where = ["."]
 include = ["src*"]
 
 [tool.setuptools.package-data]
-src = ["py.typed", "agents/schemas/*.json"]
+src = [
+    "py.typed",
+    "schemas/agents/*.json",
+    "schemas/tiers/*.json",
+    "schemas/rewind-checkpoint-ignore.json",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

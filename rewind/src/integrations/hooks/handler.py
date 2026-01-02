@@ -20,8 +20,8 @@ from .types import (
 )
 
 if TYPE_CHECKING:
-    from ..config import TierConfig
-    from ..core.controller import RewindController
+    from ...config import TierConfig
+    from ...core.controller import RewindController
 
 
 class HookHandler:

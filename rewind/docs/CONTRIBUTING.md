@@ -12,7 +12,7 @@ The easiest way to contribute (and the most common PR type we want) is improving
 
 Agent-specific behavior is defined in JSON files under:
 
-- `src/agents/schemas/`
+- `src/schemas/agents/`
 
 Each schema is designed to keep the rest of Rewind agent-agnostic.
 
@@ -52,7 +52,7 @@ Guidelines:
 
 ## Adding a new agent schema
 
-1. Copy an existing schema (e.g. `src/agents/schemas/claude.json`).
+1. Copy an existing schema (e.g. `src/schemas/agents/claude.json`).
 2. Set:
    - `id` (short, stable identifier)
    - `display_name`

@@ -27,7 +27,7 @@ else
 fi
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${BLUE}🚀 System Zero Rewind Installer (v4.0)${NC}"
+echo -e "${BLUE}🚀 System Zero Rewind Installer${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 
@@ -106,7 +106,6 @@ mkdir -p "$HOME/.rewind"
 
 # Copy Python package
 cp -r "$REPO_ROOT/src" "$INSTALL_DIR/"
-cp -r "$REPO_ROOT/tiers" "$INSTALL_DIR/"
 
 # Copy hook entry point (flattened - no hooks/ subdir)
 cp "$REPO_ROOT/bin/smart-checkpoint" "$INSTALL_DIR/"
@@ -114,10 +113,6 @@ cp "$REPO_ROOT/bin/smart-checkpoint" "$INSTALL_DIR/"
 # Copy CLI entry point
 cp "$REPO_ROOT/bin/rewind" "$INSTALL_DIR/bin-rewind"
 
-# Copy ignore config
-if [ -f "$REPO_ROOT/bin/rewind-checkpoint-ignore.json" ]; then
-    cp "$REPO_ROOT/bin/rewind-checkpoint-ignore.json" "$INSTALL_DIR/"
-fi
 
 # Make executable
 chmod +x "$INSTALL_DIR/smart-checkpoint"
@@ -179,7 +174,7 @@ if [ "$SELECT_TIER" = true ]; then
     esac
 fi
 
-TIER_FILE="$INSTALL_DIR/tiers/${SELECTED_TIER}.json"
+TIER_FILE="$INSTALL_DIR/src/schemas/tiers/${SELECTED_TIER}.json"
 
 # Extract runtime config to global config
 python3 << EOF

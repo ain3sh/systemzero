@@ -7,8 +7,8 @@ from unittest.mock import patch
 
 import pytest
 
-from src.hooks.types import PreToolUseInput, SessionStartInput
-from src.hooks.io import read_input, read_input_as, HookInputError
+from src.integrations.hooks.types import PreToolUseInput, SessionStartInput
+from src.integrations.hooks.io import read_input, read_input_as, HookInputError
 
 
 class TestHookTypes:

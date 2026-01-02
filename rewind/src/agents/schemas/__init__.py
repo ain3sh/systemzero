@@ -1,1 +1,0 @@
-"""Bundled agent schemas (JSON)."""

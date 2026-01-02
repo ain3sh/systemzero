@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
 
-from .core.controller import RewindController
+from ..core.controller import RewindController
 
 
 DEFAULT_LIST_LIMIT = 20

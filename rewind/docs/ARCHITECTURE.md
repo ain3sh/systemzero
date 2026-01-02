@@ -38,21 +38,23 @@ rewind/
   bin/
     rewind                 # python entry point
     smart-checkpoint       # hook shell shim
-    rewind-checkpoint-ignore.json
   src/
-    agents/                # agent profiles + hook normalization (JSON schemas)
-    cli.py                 # redesigned CLI
+    __main__.py            # `python -m src`
+    app/
+      cli.py               # CLI
     core/
       controller.py        # orchestrates code + transcript
       checkpoint_store.py  # tar.gz snapshots + metadata
       transcript_manager.py# transcript snapshots + fork creation
-    hooks/
-      __main__.py          # hook entry
-      handler.py           # decisions: when to checkpoint
-      io.py, types.py      # typed hook IO
+    integrations/
+      agents/              # agent detection + hook normalization
+      hooks/               # hook entry + checkpoint decision logic
+    schemas/
+      agents/              # bundled agent schemas (JSON)
+      tiers/               # bundled tier templates (JSON)
+      rewind-checkpoint-ignore.json
     utils/
       fs.py, env.py, hook_merger.py
-  tiers/                   # tier + hook templates
   tests/
   install.sh
 ```
@@ -99,8 +101,8 @@ Metadata includes:
 
 Rewind keeps core logic agent-agnostic by normalizing hook inputs and transcript behaviors via bundled agent schemas:
 
-- `src/agents/schemas/claude.json`
-- `src/agents/schemas/droid.json`
+- `src/schemas/agents/claude.json`
+- `src/schemas/agents/droid.json`
 
 These schemas define:
 
@@ -150,8 +152,7 @@ Implementation:
 - After computing the boundary offset, Rewind selects the newest checkpoint whose saved transcript cursor has `cursor.byte_offset_end <= boundary_offset` (and matches the current transcript path), restores code to that checkpoint, then performs the chat rewind.
 
 ## Hooks
-
-Hooks run `~/.rewind/system/smart-checkpoint <action>` which calls `python3 -m src.hooks <action>`.
+Hooks run `~/.rewind/system/smart-checkpoint <action>` which calls `python3 -m src.integrations.hooks <action>`.
 
 Hook responsibilities:
 
@@ -163,7 +164,7 @@ Hook responsibilities:
 
 Tier selection:
 
-- Tier hook templates are in `tiers/*.json`.
+- Tier hook templates are in `src/schemas/tiers/*.json`.
 - Runtime tier choice is stored in `~/.rewind/config.json`.
 
 ## Design constraints

@@ -79,7 +79,7 @@ This always writes a safety backup to `.agent/rewind/transcript-backup/`.
 
 ## Extending agent support
 
-Agent-specific behavior is defined in `src/agents/schemas/` (JSON). Adding a new agent is intended to be mostly schema work.
+Agent-specific behavior is defined in `src/schemas/agents/` (JSON). Adding a new agent is intended to be mostly schema work.
 
 ## Development
 

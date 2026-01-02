@@ -3,8 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from src.agents.envfile import write_env_exports
-from src.agents.normalize import resolve_context_and_envelope
+from src.integrations.agents.envfile import write_env_exports
+from src.integrations.agents.normalize import resolve_context_and_envelope
 
 
 def test_detects_claude_from_transcript_path(tmp_path: Path):

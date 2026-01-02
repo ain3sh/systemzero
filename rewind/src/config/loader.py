@@ -11,7 +11,8 @@ from typing import Any, Literal, cast
 
 from ..utils.env import get_global_rewind_dir
 from ..utils.fs import safe_json_load
-from .schemas import RewindConfig, TierConfig, IgnoreConfig
+from ..utils.resources import read_json_resource, resource_exists
+from .types import IgnoreConfig, RewindConfig, TierConfig
 
 
 TierName = Literal["minimal", "balanced", "aggressive"]
@@ -25,10 +26,6 @@ def _coerce_tier(val: object, default: TierName = "balanced") -> TierName:
 
 class ConfigLoader:
     """Loads and manages Rewind configuration."""
-    
-    # Bundled directories (relative to package)
-    BUNDLED_TIERS = Path(__file__).parent.parent.parent / "tiers"
-    BUNDLED_BIN = Path(__file__).parent.parent.parent / "bin"
     
     def __init__(self, project_root: Path | None = None):
         """Initialize config loader.
@@ -110,11 +107,10 @@ class ConfigLoader:
                 tier = "balanced"
         else:
             tier = _coerce_tier(tier_name, "balanced")
-        
-        # Try bundled tiers first (new consolidated format)
-        bundled_path = self.BUNDLED_TIERS / f"{tier}.json"
-        if bundled_path.exists():
-            data = safe_json_load(bundled_path, {})
+
+        # Try bundled tier JSON first.
+        if resource_exists("schemas", "tiers", f"{tier}.json"):
+            data = read_json_resource("schemas", "tiers", f"{tier}.json")
             # New format has runtime nested
             if "runtime" in data:
                 return TierConfig.from_dict({
@@ -148,11 +144,10 @@ class ConfigLoader:
         if system_path.exists():
             data = safe_json_load(system_path, {})
             return IgnoreConfig.from_dict(data)
-        
-        # Try bundled config in bin/
-        bundled_path = self.BUNDLED_BIN / "rewind-checkpoint-ignore.json"
-        if bundled_path.exists():
-            data = safe_json_load(bundled_path, {})
+
+        # Try bundled config in package resources.
+        if resource_exists("schemas", "rewind-checkpoint-ignore.json"):
+            data = read_json_resource("schemas", "rewind-checkpoint-ignore.json")
             return IgnoreConfig.from_dict(data)
         
         # Return default

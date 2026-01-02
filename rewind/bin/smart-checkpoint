@@ -14,7 +14,14 @@ set -euo pipefail
 
 # Get script directory
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
+
+# When running from the repo, this script lives in `rewind/bin/` and the package
+# root is the parent directory. When installed, this script lives alongside `src/`.
+if [ -d "$SCRIPT_DIR/src" ]; then
+    PACKAGE_DIR="$SCRIPT_DIR"
+else
+    PACKAGE_DIR="$(dirname "$SCRIPT_DIR")"
+fi
 
 # Action argument
 ACTION="${1:-}"
@@ -30,4 +37,4 @@ fi
 export PYTHONPATH="${PACKAGE_DIR}:${PYTHONPATH:-}"
 
 # Use python3 explicitly (more reliable than just python)
-exec python3 -m src.hooks "$ACTION"
+exec python3 -m src.integrations.hooks "$ACTION"

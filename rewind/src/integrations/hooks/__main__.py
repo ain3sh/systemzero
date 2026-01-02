@@ -1,4 +1,4 @@
-"""Entry point for running hooks via: python3 -m src.hooks <action>
+"""Entry point for running hooks via: python3 -m src.integrations.hooks <action>
 
 This is the main hook entry point called by the shell shim.
 It implements proper hook protocol:
@@ -18,14 +18,14 @@ def main() -> int:
     """Main entry point for hook processing."""
     # Minimal imports for fast startup
     if len(sys.argv) < 2:
-        print("Usage: python3 -m src.hooks <action>", file=sys.stderr)
+        print("Usage: python3 -m src.integrations.hooks <action>", file=sys.stderr)
         print("Actions: session-start, pre-tool-use, post-bash, stop", file=sys.stderr)
         return 1
     
     action = sys.argv[1]
     
     # Import lazily to minimize startup time
-    from .io import read_input_with_context, exit_success, emit_context, log_debug
+    from .io import emit_context, exit_success, log_debug, read_input_with_context
     from .handler import HookHandler
     from ..agents.envfile import write_env_exports
     
@@ -40,8 +40,8 @@ def main() -> int:
         project_root = (root or cwd).expanduser()
         
         # Lazy import controller to avoid loading everything
-        from ..core.controller import RewindController
-        from ..config import ConfigLoader
+        from ...config import ConfigLoader
+        from ...core.controller import RewindController
         
         # Initialize controller
         controller = RewindController(project_root=project_root)

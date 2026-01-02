@@ -15,7 +15,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterator
 
-from ..config.schemas import IgnoreConfig
+from ..config.types import IgnoreConfig
 
 
 @dataclass

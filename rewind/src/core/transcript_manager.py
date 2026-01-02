@@ -23,7 +23,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from ..agents.registry import AgentRegistry
+from ..integrations.agents.registry import AgentRegistry
 
 
 AgentKind = str

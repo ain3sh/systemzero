@@ -1,6 +1,6 @@
 """Configuration management for Rewind."""
 
-from .schemas import (
+from .types import (
     StorageMode,
     AntiSpamConfig,
     SignificanceConfig,

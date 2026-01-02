@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from src.core.checkpoint_store import CheckpointStore
-from src.config.schemas import IgnoreConfig
+from src.config.types import IgnoreConfig
 
 
 @pytest.fixture

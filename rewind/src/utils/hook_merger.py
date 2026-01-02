@@ -21,7 +21,7 @@ from pathlib import Path
 REWIND_HOOK_IDENTIFIER = "smart-checkpoint"
 
 
-def is_rewind_hook(hook_entry: dict) -> bool:
+def is_rewind_hook(hook_entry: object) -> bool:
     """Check if a hook entry belongs to rewind.
     
     Args:
@@ -30,15 +30,23 @@ def is_rewind_hook(hook_entry: dict) -> bool:
     Returns:
         True if any hook command contains our identifier
     """
-    hooks = hook_entry.get("hooks", [])
+    if not isinstance(hook_entry, dict):
+        return False
+
+    hooks = hook_entry.get("hooks")
+    if not isinstance(hooks, list):
+        return False
+
     for hook in hooks:
-        command = hook.get("command", "")
-        if REWIND_HOOK_IDENTIFIER in command:
+        if not isinstance(hook, dict):
+            continue
+        command = hook.get("command")
+        if isinstance(command, str) and REWIND_HOOK_IDENTIFIER in command:
             return True
     return False
 
 
-def filter_non_rewind_hooks(hook_list: list[dict]) -> list[dict]:
+def filter_non_rewind_hooks(hook_list: list[object]) -> list[object]:
     """Filter out rewind hooks from a hook list.
     
     Args:
@@ -48,6 +56,16 @@ def filter_non_rewind_hooks(hook_list: list[dict]) -> list[dict]:
         List with only non-rewind hooks
     """
     return [h for h in hook_list if not is_rewind_hook(h)]
+
+
+def _as_hooks_object(settings: dict) -> dict:
+    hooks = settings.get("hooks")
+    if isinstance(hooks, dict):
+        return hooks
+
+    hooks = {}
+    settings["hooks"] = hooks
+    return hooks
 
 
 def merge_hooks(
@@ -65,34 +83,49 @@ def merge_hooks(
     Returns:
         Updated settings dict
     """
-    # Ensure hooks section exists
-    if "hooks" not in settings:
-        settings["hooks"] = {}
-    
-    current_hooks = settings["hooks"]
-    
-    # Get all hook event types from both sources
-    all_events = set(current_hooks.keys()) | set(tier_hooks.keys())
-    
-    for event in all_events:
-        current_list = current_hooks.get(event, [])
-        tier_list = tier_hooks.get(event, [])
-        
-        # Filter out existing rewind hooks
-        non_rewind = filter_non_rewind_hooks(current_list)
-        
-        if remove_only:
-            # Only keep non-rewind hooks
-            if non_rewind:
-                current_hooks[event] = non_rewind
-            elif event in current_hooks:
-                del current_hooks[event]
-        else:
-            # Add tier's rewind hooks after non-rewind hooks
+    current_hooks = _as_hooks_object(settings)
+
+    if remove_only:
+        # Remove Rewind hooks from any list-valued entries.
+        # Some clients store metadata under hooks (e.g. booleans/lists); leave those untouched.
+        for key, value in list(current_hooks.items()):
+            if not isinstance(value, list):
+                continue
+
+            filtered = filter_non_rewind_hooks(value)
+            if filtered == value:
+                continue
+
+            if filtered:
+                current_hooks[key] = filtered
+            else:
+                del current_hooks[key]
+    else:
+        # First remove any existing Rewind hooks across all list-valued hook entries.
+        # This keeps tier changes idempotent without touching metadata.
+        for key, value in list(current_hooks.items()):
+            if not isinstance(value, list):
+                continue
+
+            filtered = filter_non_rewind_hooks(value)
+            if filtered == value:
+                continue
+
+            if filtered:
+                current_hooks[key] = filtered
+            else:
+                del current_hooks[key]
+
+        # Only add events we manage (those present in the tier file).
+        for event, tier_list in tier_hooks.items():
+            existing_value = current_hooks.get(event, [])
+            existing_list = existing_value if isinstance(existing_value, list) else []
+
+            non_rewind = filter_non_rewind_hooks(existing_list)
             current_hooks[event] = non_rewind + tier_list
-    
-    # Clean up empty hooks dict
-    if not settings["hooks"]:
+
+    # Clean up hooks if empty
+    if isinstance(settings.get("hooks"), dict) and not settings["hooks"]:
         del settings["hooks"]
     
     return settings

@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
-from importlib import resources
 from typing import Iterable
+
+from ...utils.resources import resource_dir
 
 from .types import AgentProfile
 
@@ -14,7 +15,7 @@ class AgentRegistry:
 
     @classmethod
     def load_bundled(cls) -> AgentRegistry:
-        pkg = resources.files("src.agents.schemas")
+        pkg = resource_dir("schemas", "agents")
         profiles: list[AgentProfile] = []
         for entry in sorted(pkg.iterdir(), key=lambda p: p.name):
             if entry.suffix != ".json":

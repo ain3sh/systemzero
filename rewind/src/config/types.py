@@ -71,7 +71,7 @@ class TierConfig:
             significance=SignificanceConfig(
                 enabled=significance_data.get("enabled", True),
                 min_change_size=significance_data.get("minChangeSize", 50),
-                critical_files=significance_data.get("criticalFiles", []),
+                critical_files=significance_data.get("criticalFiles", SignificanceConfig().critical_files),
             ),
         )
 
@@ -158,12 +158,24 @@ class RewindConfig:
     
     @classmethod
     def from_dict(cls, data: dict) -> RewindConfig:
-        """Create RewindConfig from dictionary."""
+        """Create RewindConfig from dictionary.
+
+        Note: Preset resolution (merging preset defaults with runtime overrides)
+        is handled by ConfigLoader. This method parses only local values.
+        """
         storage_data = data.get("storage", {})
         mode_str = storage_data.get("mode", "project")
-        
+
+        preset_val = data.get("preset")
+        preset: Literal["minimal", "balanced", "aggressive"] = "balanced"
+        if isinstance(preset_val, str) and preset_val in {"minimal", "balanced", "aggressive"}:
+            preset = preset_val
+
+        runtime_overrides = data.get("runtime", {})
+        runtime_dict = runtime_overrides if isinstance(runtime_overrides, dict) else {}
+
         return cls(
             storage_mode=StorageMode(mode_str) if mode_str in ("project", "global") else StorageMode.PROJECT,
-            tier=TierConfig.from_dict(data.get("tier", {})),
+            tier=TierConfig.from_dict({"tier": preset, **runtime_dict}),
             ignore=IgnoreConfig.from_dict(data.get("ignore", {})),
         )

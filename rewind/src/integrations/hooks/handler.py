@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from .io import log_debug
+from .policy import HookOutcome, session_start_description, should_create_session_start_baseline
 from .types import (
     HookInput,
     PostToolUseInput,
@@ -44,14 +45,14 @@ class HookHandler:
         self.tier_config = tier_config
         self._last_checkpoint_time: float | None = None
     
-    def handle(self, hook_input: HookInput) -> bool:
+    def handle(self, hook_input: HookInput) -> HookOutcome:
         """Handle a hook event.
         
         Args:
             hook_input: Parsed hook input
             
         Returns:
-            True if checkpoint was created, False otherwise
+            HookOutcome describing any side effects and user-facing messages
         """
         if isinstance(hook_input, SessionStartInput):
             return self._handle_session_start(hook_input)
@@ -65,26 +66,38 @@ class HookHandler:
             return self._handle_user_prompt_submit(hook_input)
         else:
             log_debug(f"Unhandled hook event: {hook_input.hook_event_name}")
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
     
-    def _handle_session_start(self, hook_input: SessionStartInput) -> bool:
+    def _handle_session_start(self, hook_input: SessionStartInput) -> HookOutcome:
         """Handle SessionStart hook.
-        
-        Creates initial checkpoint on startup.
+
+        Creates a baseline checkpoint depending on source and existing transcript coverage.
         """
-        if hook_input.source != "startup":
-            log_debug(f"Skipping checkpoint for session source: {hook_input.source}")
-            return False
-        
-        log_debug("Session start - creating initial checkpoint")
+        if hook_input.source in {"resume", "clear", "compact"}:
+            self._reset_anti_spam_state()
+
+        checkpoints = self.controller.list_checkpoints()
+        should_create, warnings = should_create_session_start_baseline(
+            source=hook_input.source,
+            transcript_path=hook_input.transcript_path,
+            checkpoints=checkpoints,
+        )
+
+        if not should_create:
+            log_debug(f"SessionStart source={hook_input.source}: no baseline checkpoint")
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=warnings)
+
+        desc = session_start_description(hook_input.source)
+        log_debug(f"SessionStart source={hook_input.source}: creating baseline checkpoint")
         result = self.controller.create_checkpoint(
-            description="Session start",
+            description=desc,
             session_id=hook_input.session_id,
             transcript_path=hook_input.transcript_path,
         )
-        return result.get("success", False)
+        created = bool(result.get("success", False))
+        return HookOutcome(checkpoint_created=created, context_messages=[], warnings=warnings)
     
-    def _handle_pre_tool_use(self, hook_input: PreToolUseInput) -> bool:
+    def _handle_pre_tool_use(self, hook_input: PreToolUseInput) -> HookOutcome:
         """Handle PreToolUse hook.
         
         Creates checkpoint before file-modifying tools.
@@ -94,12 +107,12 @@ class HookHandler:
         # Only checkpoint for file-modifying tools
         if tool_name not in self.CHECKPOINT_TOOLS:
             log_debug(f"Skipping non-checkpoint tool: {tool_name}")
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         # Anti-spam check
         if not self._should_checkpoint():
             log_debug("Anti-spam: skipping checkpoint (too soon)")
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         # Get target file info for description
         tool_input = hook_input.tool_input
@@ -118,24 +131,24 @@ class HookHandler:
         
         if result.get("success"):
             self._update_checkpoint_time()
-        
-        return result.get("success", False)
+
+        return HookOutcome(checkpoint_created=bool(result.get("success", False)), context_messages=[], warnings=[])
     
-    def _handle_post_tool_use(self, hook_input: PostToolUseInput) -> bool:
+    def _handle_post_tool_use(self, hook_input: PostToolUseInput) -> HookOutcome:
         """Handle PostToolUse hook.
         
         Used in aggressive tier for post-Bash checkpoints.
         """
         if hook_input.tool_name != "Bash":
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         # Only checkpoint after potentially destructive commands
         command = hook_input.tool_input.get("command", "")
         if not self._is_destructive_command(command):
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         if not self._should_checkpoint():
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         description = f"After Bash: {command[:50]}..."
         result = self.controller.create_checkpoint(
@@ -146,10 +159,10 @@ class HookHandler:
         
         if result.get("success"):
             self._update_checkpoint_time()
-        
-        return result.get("success", False)
+
+        return HookOutcome(checkpoint_created=bool(result.get("success", False)), context_messages=[], warnings=[])
     
-    def _handle_stop(self, hook_input: StopInput) -> bool:
+    def _handle_stop(self, hook_input: StopInput) -> HookOutcome:
         """Handle Stop hook.
         
         Creates final checkpoint when session ends.
@@ -160,9 +173,9 @@ class HookHandler:
             session_id=hook_input.session_id,
             transcript_path=hook_input.transcript_path,
         )
-        return result.get("success", False)
+        return HookOutcome(checkpoint_created=bool(result.get("success", False)), context_messages=[], warnings=[])
     
-    def _handle_user_prompt_submit(self, hook_input: UserPromptSubmitInput) -> bool:
+    def _handle_user_prompt_submit(self, hook_input: UserPromptSubmitInput) -> HookOutcome:
         """Handle UserPromptSubmit hook.
         
         Used in aggressive tier for prompt-based checkpoints.
@@ -172,10 +185,10 @@ class HookHandler:
         destructive_keywords = ["delete", "remove", "refactor", "rewrite", "replace all"]
         
         if not any(kw in prompt_lower for kw in destructive_keywords):
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         if not self._should_checkpoint():
-            return False
+            return HookOutcome(checkpoint_created=False, context_messages=[], warnings=[])
         
         description = f"Before prompt: {hook_input.prompt[:30]}..."
         result = self.controller.create_checkpoint(
@@ -186,8 +199,13 @@ class HookHandler:
         
         if result.get("success"):
             self._update_checkpoint_time()
-        
-        return result.get("success", False)
+
+        return HookOutcome(checkpoint_created=bool(result.get("success", False)), context_messages=[], warnings=[])
+
+    def _reset_anti_spam_state(self) -> None:
+        """Reset anti-spam so the next checkpoint isn't suppressed across session boundaries."""
+        self._last_checkpoint_time = 0.0
+        self._save_state()
     
     def _should_checkpoint(self) -> bool:
         """Check if we should create a checkpoint (anti-spam).

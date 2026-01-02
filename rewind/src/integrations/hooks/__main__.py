@@ -81,11 +81,14 @@ def main() -> int:
         
         # Create handler and process
         handler = HookHandler(controller=controller, tier_config=tier_config)
-        checkpoint_created = handler.handle(hook_input)
-        
-        # For SessionStart, emit context if checkpoint was created
-        if hook_input.hook_event_name == "SessionStart" and checkpoint_created:
-            emit_context("[rewind] Checkpoint created on session start")
+        outcome = handler.handle(hook_input)
+
+        if hook_input.hook_event_name == "SessionStart":
+            for msg in outcome.context_messages:
+                emit_context(msg)
+
+        for warn in outcome.warnings:
+            print(warn, file=sys.stderr)
         
         # Always exit success (allow the action)
         # We never block tool calls, just checkpoint before them

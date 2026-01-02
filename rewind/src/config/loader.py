@@ -15,13 +15,32 @@ from ..utils.resources import read_json_resource, resource_exists
 from .types import IgnoreConfig, RewindConfig, TierConfig
 
 
-TierName = Literal["minimal", "balanced", "aggressive"]
+PresetName = Literal["minimal", "balanced", "aggressive"]
 
 
-def _coerce_tier(val: object, default: TierName = "balanced") -> TierName:
+def _coerce_preset(val: object, default: PresetName = "balanced") -> PresetName:
     if isinstance(val, str) and val in {"minimal", "balanced", "aggressive"}:
-        return cast(TierName, val)
+        return cast(PresetName, val)
     return default
+
+
+def _read_preset_definition(preset: PresetName) -> dict[str, Any]:
+    if resource_exists("schemas", "tiers", f"{preset}.json"):
+        data = read_json_resource("schemas", "tiers", f"{preset}.json")
+        return data if isinstance(data, dict) else {}
+
+    # Installed system fallback.
+    system_path = get_global_rewind_dir() / "system" / "src" / "schemas" / "tiers" / f"{preset}.json"
+    if system_path.exists():
+        data = safe_json_load(system_path, {})
+        return data if isinstance(data, dict) else {}
+
+    return {}
+
+
+def _extract_runtime_overrides(config: dict[str, Any]) -> dict[str, Any]:
+    runtime = config.get("runtime", {})
+    return runtime if isinstance(runtime, dict) else {}
 
 
 class ConfigLoader:
@@ -54,7 +73,6 @@ class ConfigLoader:
         Returns:
             Merged RewindConfig
         """
-        # Start with defaults
         merged: dict[str, Any] = {}
         
         # Load global config
@@ -70,68 +88,70 @@ class ConfigLoader:
                 project_data = safe_json_load(project_config_path, {})
                 merged = self._deep_merge(merged, project_data)
         
-        return RewindConfig.from_dict(merged)
+        # Resolve preset + runtime.
+        preset = _coerce_preset(merged.get("preset"), "balanced")
+
+        preset_def = _read_preset_definition(preset)
+        preset_runtime = preset_def.get("runtime", {}) if isinstance(preset_def.get("runtime"), dict) else {}
+        runtime_overrides = _extract_runtime_overrides(merged)
+        effective_runtime = self._deep_merge(preset_runtime, runtime_overrides)
+
+        tier_config = TierConfig.from_dict(
+            {
+                "tier": preset,
+                "description": preset_def.get("description", "") if isinstance(preset_def.get("description"), str) else "",
+                **effective_runtime,
+            }
+        )
+
+        storage_data = merged.get("storage", {})
+        storage_mode_str = storage_data.get("mode", "project") if isinstance(storage_data, dict) else "project"
+
+        ignore_config = IgnoreConfig.from_dict(merged.get("ignore", {}))
+
+        storage_mode = RewindConfig().storage_mode
+        if isinstance(storage_mode_str, str) and storage_mode_str in {"project", "global"}:
+            storage_mode = RewindConfig.from_dict({"storage": {"mode": storage_mode_str}}).storage_mode
+
+        return RewindConfig(
+            storage_mode=storage_mode,
+            tier=tier_config,
+            ignore=ignore_config,
+        )
     
     def reload(self) -> RewindConfig:
         """Force reload configuration."""
         self._config = None
         return self.config
     
-    def load_tier_config(self, tier_name: str | None = None) -> TierConfig:
-        """Load tier configuration.
-        
-        If tier_name is provided, loads from tier file.
-        Otherwise, loads from global config's runtime section.
-        
-        Args:
-            tier_name: Name of tier (minimal, balanced, aggressive), or None to use global config
-            
-        Returns:
-            TierConfig for the specified tier
+    def load_tier_config(self, preset_name: str | None = None) -> TierConfig:
+        """Load effective runtime configuration.
+
+        If preset_name is provided, loads preset defaults only.
+        Otherwise, uses global config (`~/.rewind/config.json`) to load:
+        - `preset` (required for selection; defaults to balanced if missing)
+        - `runtime` overrides merged on top of preset runtime
         """
-        tier: TierName
-
-        # If no tier specified, try to get from global config
-        if tier_name is None:
+        if preset_name is None:
             global_config_path = get_global_rewind_dir() / "config.json"
-            if global_config_path.exists():
-                global_data = safe_json_load(global_config_path, {})
-                tier = _coerce_tier(global_data.get("tier"), "balanced")
-                # If global config has runtime section, use it directly
-                if "runtime" in global_data:
-                    return TierConfig.from_dict({
-                        "tier": tier,
-                        **global_data["runtime"]
-                    })
-            else:
-                tier = "balanced"
+            global_data = safe_json_load(global_config_path, {}) if global_config_path.exists() else {}
+            preset = _coerce_preset(global_data.get("preset"), "balanced")
+            overrides = _extract_runtime_overrides(global_data)
         else:
-            tier = _coerce_tier(tier_name, "balanced")
+            preset = _coerce_preset(preset_name, "balanced")
+            overrides = {}
 
-        # Try bundled tier JSON first.
-        if resource_exists("schemas", "tiers", f"{tier}.json"):
-            data = read_json_resource("schemas", "tiers", f"{tier}.json")
-            # New format has runtime nested
-            if "runtime" in data:
-                return TierConfig.from_dict({
-                    "tier": _coerce_tier(data.get("tier"), tier),
-                    **data["runtime"]
-                })
-            return TierConfig.from_dict(data)
-        
-        # Try installed system tiers
-        system_path = get_global_rewind_dir() / "system" / "tiers" / f"{tier}.json"
-        if system_path.exists():
-            data = safe_json_load(system_path, {})
-            if "runtime" in data:
-                return TierConfig.from_dict({
-                    "tier": _coerce_tier(data.get("tier"), tier),
-                    **data["runtime"]
-                })
-            return TierConfig.from_dict(data)
-        
-        # Return default
-        return TierConfig(tier=tier)
+        preset_def = _read_preset_definition(preset)
+        preset_runtime = preset_def.get("runtime", {}) if isinstance(preset_def.get("runtime"), dict) else {}
+        effective_runtime = self._deep_merge(preset_runtime, overrides)
+
+        return TierConfig.from_dict(
+            {
+                "tier": preset,
+                "description": preset_def.get("description", "") if isinstance(preset_def.get("description"), str) else "",
+                **effective_runtime,
+            }
+        )
     
     def load_ignore_config(self) -> IgnoreConfig:
         """Load ignore patterns configuration.
@@ -140,7 +160,7 @@ class ConfigLoader:
             IgnoreConfig with merged patterns
         """
         # Try installed system config first (most up-to-date after install)
-        system_path = get_global_rewind_dir() / "system" / "rewind-checkpoint-ignore.json"
+        system_path = get_global_rewind_dir() / "system" / "src" / "schemas" / "rewind-checkpoint-ignore.json"
         if system_path.exists():
             data = safe_json_load(system_path, {})
             return IgnoreConfig.from_dict(data)

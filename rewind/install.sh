@@ -89,7 +89,8 @@ if [ -f "$GLOBAL_CONFIG" ]; then
 import json
 try:
     with open('$GLOBAL_CONFIG') as f:
-        print(json.load(f).get('tier', 'balanced'))
+        data = json.load(f)
+        print(data.get('preset') or data.get('tier') or 'balanced')
 except:
     print('balanced')
 " 2>/dev/null || echo "balanced")
@@ -187,19 +188,41 @@ config_path = Path("$GLOBAL_CONFIG")
 with open(tier_path) as f:
     tier = json.load(f)
 
-config = {
-    "tier": tier["tier"],
-    "runtime": tier["runtime"],
-    "storage": {"mode": "project"}
-}
+def deep_diff(defaults, overrides):
+    if not isinstance(defaults, dict) or not isinstance(overrides, dict):
+        return overrides
 
-# Preserve existing storage mode if present
+    out = {}
+    for k, v in overrides.items():
+        if k not in defaults:
+            out[k] = v
+            continue
+        dv = defaults.get(k)
+        if isinstance(dv, dict) and isinstance(v, dict):
+            sub = deep_diff(dv, v)
+            if sub:
+                out[k] = sub
+            continue
+        if v != dv:
+            out[k] = v
+    return out
+
+config = {"preset": tier["tier"], "storage": {"mode": "project"}}
+
+# Preserve existing storage mode and runtime overrides if present
 if config_path.exists():
     try:
         with open(config_path) as f:
             existing = json.load(f)
         if "storage" in existing:
             config["storage"] = existing["storage"]
+
+        existing_runtime = existing.get("runtime") if isinstance(existing, dict) else None
+        if isinstance(existing_runtime, dict):
+            defaults = tier.get("runtime", {}) if isinstance(tier.get("runtime"), dict) else {}
+            runtime_overrides = deep_diff(defaults, existing_runtime)
+            if runtime_overrides:
+                config["runtime"] = runtime_overrides
     except:
         pass
 

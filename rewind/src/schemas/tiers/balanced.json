@@ -28,7 +28,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Create",
+        "matcher": "^(Edit|Write|MultiEdit|NotebookEdit|Create)$",
         "hooks": [
           {
             "type": "command",
@@ -40,7 +40,7 @@
     ],
     "SessionStart": [
       {
-        "matcher": "startup",
+        "matcher": "startup|resume|clear|compact",
         "hooks": [
           {
             "type": "command",
